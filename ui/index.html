@@ -15,7 +15,7 @@
         <div>
           <div class="brand-title">
             AutoSubAI Desktop
-            <span class="badge-beta">v1.4.0 Pro NLE Studio</span>
+            <span class="badge-beta">v1.4.1 Pro NLE Studio</span>
           </div>
           <div class="brand-sub" data-i18n="brandSub">Local &amp; Cloud Drama Subtitling, Style Inspector &amp; Video Finishing</div>
         </div>
@@ -308,62 +308,54 @@
             </div>
           </div>
 
-          <!-- Studio 2-Column Workspace -->
-          <div class="studio-split">
-            <!-- LEFT PANE: Video Preview + Transport + Visual Timeline + 4-Tab Pro Inspector -->
+          <!-- Studio 3-Pane Pro NLE Dock (Left: Compact Subtitles | Center: Wide Monitor | Right: 8-Tab Inspector) -->
+          <div class="studio-nle-dock">
+            <!-- CENTER PANE: Wide Program Monitor & Transport -->
             <section class="card studio-player-panel">
               <div class="studio-source-bar">
                 <span id="studio-source-badge" class="pill pill-muted">Loading...</span>
-                <button id="studio-link-local-btn" type="button" class="btn btn-secondary btn-xs" data-i18n="btnLinkLocal">📎 ผูกไฟล์วิดีโอในเครื่อง</button>
+                <div class="transport-group">
+                  <span class="muted" data-i18n="lblAspect">สัดส่วน:</span>
+                  <button type="button" class="chip-btn active" data-ar="16:9">16:9</button>
+                  <button type="button" class="chip-btn" data-ar="9:16">9:16</button>
+                  <button type="button" class="chip-btn" data-ar="1:1">1:1</button>
+                  <span class="muted" style="margin-left:4px;" data-i18n="lblSafeZone">Safe Zone:</span>
+                  <button type="button" class="chip-btn active" data-sz="off">Off</button>
+                  <button type="button" class="chip-btn" data-sz="9:16">9:16</button>
+                  <button type="button" class="chip-btn" data-sz="16:9">16:9</button>
+                  <button id="studio-link-local-btn" type="button" class="btn btn-secondary btn-xs" style="margin-left:4px;" data-i18n="btnLinkLocal">📎 ผูกไฟล์วิดีโอในเครื่อง</button>
+                </div>
               </div>
 
-              <!-- Live WYSIWYG Video Stage -->
-              <div id="studio-video-stage" class="video-stage ar-16-9">
-                <video id="studio-video" controls playsinline></video>
-                <audio id="studio-bgm-audio" loop preload="auto" style="display:none;"></audio>
-                <!-- Live Delogo / Cover Bar Preview -->
-                <div id="studio-delogo-preview" class="delogo-preview hidden" aria-hidden="true"></div>
-                <!-- Live Photo B-Roll / PiP Preview -->
-                <img id="studio-broll-preview" class="broll-preview hidden" alt="B-Roll" />
-                <!-- Live Watermark PNG Preview -->
-                <img id="studio-watermark-preview" class="watermark-preview hidden" alt="Watermark" />
-                <!-- Live Viral Thumbnail Headline Preview -->
-                <div id="studio-thumb-preview" class="thumb-preview-overlay hidden" aria-hidden="true">
-                  <div id="studio-thumb-hl" class="thumb-preview-hl"></div>
-                  <div id="studio-thumb-sl" class="thumb-preview-sl hidden"></div>
-                </div>
-                <!-- Live Safe Zone Overlay -->
-                <div id="studio-safezone-overlay" class="safezone-overlay hidden" aria-hidden="true"></div>
-                <!-- Live WYSIWYG Subtitle Overlay (Primary + Bilingual Secondary) -->
-                <div id="studio-sub-anchor" class="sub-anchor hidden">
-                  <div id="studio-sub-overlay" class="sub-overlay">
-                    <div id="studio-sub-primary" class="sub-primary-line"></div>
-                    <div id="studio-sub-secondary" class="sub-secondary-line hidden"></div>
+              <!-- Live WYSIWYG Video Stage (Maximized Center Monitor) -->
+              <div class="video-stage-wrap">
+                <div id="studio-video-stage" class="video-stage ar-16-9">
+                  <video id="studio-video" controls playsinline></video>
+                  <audio id="studio-bgm-audio" loop preload="auto" style="display:none;"></audio>
+                  <!-- Live Delogo / Cover Bar Preview -->
+                  <div id="studio-delogo-preview" class="delogo-preview hidden" aria-hidden="true"></div>
+                  <!-- Live Photo B-Roll / PiP Preview -->
+                  <img id="studio-broll-preview" class="broll-preview hidden" alt="B-Roll" />
+                  <!-- Live Watermark PNG Preview -->
+                  <img id="studio-watermark-preview" class="watermark-preview hidden" alt="Watermark" />
+                  <!-- Live Viral Thumbnail Headline Preview -->
+                  <div id="studio-thumb-preview" class="thumb-preview-overlay hidden" aria-hidden="true">
+                    <div id="studio-thumb-hl" class="thumb-preview-hl"></div>
+                    <div id="studio-thumb-sl" class="thumb-preview-sl hidden"></div>
+                  </div>
+                  <!-- Live Safe Zone Overlay -->
+                  <div id="studio-safezone-overlay" class="safezone-overlay hidden" aria-hidden="true"></div>
+                  <!-- Live WYSIWYG Subtitle Overlay (Primary + Bilingual Secondary) -->
+                  <div id="studio-sub-anchor" class="sub-anchor hidden">
+                    <div id="studio-sub-overlay" class="sub-overlay">
+                      <div id="studio-sub-primary" class="sub-primary-line"></div>
+                      <div id="studio-sub-secondary" class="sub-secondary-line hidden"></div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <!-- CapCut-Style 4-Track Visual Timeline -->
-              <div class="waveform-toolbar">
-                <div class="transport-group">
-                  <span class="muted">🎞️ 4-Track Timeline:</span>
-                  <button type="button" class="chip-btn active" data-wf-zoom="1">1x</button>
-                  <button type="button" class="chip-btn" data-wf-zoom="2">2x</button>
-                  <button type="button" class="chip-btn" data-wf-zoom="4">4x</button>
-                  <button type="button" class="chip-btn" data-wf-zoom="8">8x</button>
-                </div>
-                <div class="transport-group">
-                  <button id="wf-set-in-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnSetIn">📍 จุดเริ่ม [I]</button>
-                  <button id="wf-set-out-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnSetOut">📍 จุดจบ [O]</button>
-                  <button id="wf-cut-zone-btn" type="button" class="btn btn-danger-ghost btn-xs" data-i18n="btnAddCutZone">✂️ ตัดช่วงนี้ออก</button>
-                  <button id="wf-clear-cuts-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnClearCuts">🧹 ล้างจุดตัด</button>
-                </div>
-              </div>
-              <div id="studio-waveform-wrap" class="waveform-wrap" title="คลิกเพื่อกรอ • ลากขอบบล็อกซับด้านล่างเพื่อจูนเวลา / Click to seek • Drag cue edges to re-time">
-                <canvas id="studio-waveform-canvas"></canvas>
-              </div>
-
-              <!-- Transport & Aspect / Safe Zone Controls -->
+              <!-- Transport Controls -->
               <div class="transport-bar">
                 <div class="transport-group">
                   <button id="studio-skip-back-btn" type="button" class="btn btn-ghost btn-xs" title="J (-3s)">⏪ -3s</button>
@@ -371,6 +363,8 @@
                   <button id="studio-skip-fwd-btn" type="button" class="btn btn-ghost btn-xs" title="L (+3s)">+3s ⏩</button>
                   <button id="studio-loop-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnLoop">🔁 วนซ้ำท่อนนี้</button>
                 </div>
+
+                <div class="shortcut-hint" style="flex:1; text-align:center;" data-i18n="shortcutTip">คีย์ลัด: Space เล่น/หยุด • J/L ±3วิ • B วางเส้นตัด • Ctrl+S บันทึก</div>
 
                 <div class="transport-group">
                   <label class="muted" for="studio-speed-select" data-i18n="lblSpeed">ความเร็ว:</label>
@@ -384,25 +378,10 @@
                   </select>
                 </div>
               </div>
+            </section>
 
-              <div class="transport-bar">
-                <div class="transport-group">
-                  <span class="muted" data-i18n="lblAspect">สัดส่วน:</span>
-                  <button type="button" class="chip-btn active" data-ar="16:9">16:9</button>
-                  <button type="button" class="chip-btn" data-ar="9:16">9:16</button>
-                  <button type="button" class="chip-btn" data-ar="1:1">1:1</button>
-                </div>
-                <div class="transport-group">
-                  <span class="muted" data-i18n="lblSafeZone">Safe Zone:</span>
-                  <button type="button" class="chip-btn active" data-sz="off">Off</button>
-                  <button type="button" class="chip-btn" data-sz="9:16">9:16</button>
-                  <button type="button" class="chip-btn" data-sz="16:9">16:9</button>
-                </div>
-              </div>
-
-              <div class="shortcut-hint" data-i18n="shortcutTip">คีย์ลัด: Space เล่น/หยุด • J ถอย 3 วิ • L หน้า 3 วิ • Ctrl+Enter แยกบรรทัด • Ctrl+S บันทึก</div>
-
-              <!-- 8-TAB PRO NLE INSPECTOR DRAWER -->
+            <!-- RIGHT PANE: 8-TAB PRO NLE INSPECTOR DOCK -->
+            <section class="card studio-inspector-panel">
               <div class="inspector-box">
                 <div class="inspector-tabs inspector-tabs-8" role="tablist">
                   <button type="button" class="insp-tab active" data-insp-tab="style" data-i18n="inspTabStyle">🎨 สไตล์ซับ</button>
@@ -906,6 +885,30 @@
               <div id="studio-segments-list" class="segments-list"></div>
             </section>
           </div>
+
+          <!-- FULL-WIDTH BOTTOM DOCK: 4-TRACK VISUAL TIMELINE (100% Edge-to-Edge) -->
+          <section class="card studio-timeline-dock">
+            <div class="waveform-toolbar">
+              <div class="transport-group">
+                <span class="muted" style="font-weight:700; color:#e2e8f0;">🎞️ 4-Track Visual Timeline</span>
+                <button type="button" class="chip-btn active" data-wf-zoom="1">1x</button>
+                <button type="button" class="chip-btn" data-wf-zoom="2">2x</button>
+                <button type="button" class="chip-btn" data-wf-zoom="4">4x</button>
+                <button type="button" class="chip-btn" data-wf-zoom="8">8x</button>
+                <button type="button" class="chip-btn" data-wf-zoom="16">16x</button>
+              </div>
+              <div class="transport-group">
+                <button id="wf-razor-split-btn" type="button" class="btn btn-secondary btn-xs" title="วางเส้นตัด ณ Playhead [B]">🔪 วางเส้นตัด [B]</button>
+                <button id="wf-set-in-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnSetIn">📍 จุดเริ่ม [I]</button>
+                <button id="wf-set-out-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnSetOut">📍 จุดจบ [O]</button>
+                <button id="wf-cut-zone-btn" type="button" class="btn btn-danger-ghost btn-xs" data-i18n="btnAddCutZone">✂️ ตัดช่วงนี้ออก</button>
+                <button id="wf-clear-cuts-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnClearCuts">🧹 ล้างจุดตัด</button>
+              </div>
+            </div>
+            <div id="studio-waveform-wrap" class="waveform-wrap" title="คลิกเพื่อกรอ • ลากขอบบล็อกซับบนแทร็ก T3 เพื่อจูนเวลา / Click to seek • Drag T3 cue edges to re-time">
+              <canvas id="studio-waveform-canvas"></canvas>
+            </div>
+          </section>
         </div>
       </div>
     </main>

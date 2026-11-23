@@ -65,8 +65,17 @@
     }
 
     setZoom(z) {
-      this.zoom = Math.max(1, Math.min(8, Number(z) || 1));
+      this.zoom = Math.max(1, Math.min(16, Number(z) || 1));
       this.draw();
+    }
+
+    _fmtRuler(sec) {
+      const s = Math.max(0, Math.floor(sec));
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const r = s % 60;
+      if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+      return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
     }
 
     setCurrentTime(t, activeIdx) {
@@ -90,8 +99,8 @@
     }
 
     _hitTestCue(x, y, w) {
-      // T3 Subtitle track sits at y = 24..54
-      if (y < 23 || y > 55) return null;
+      // T3 Subtitle track sits at y = 41..75 (below 16px timecode ruler + 22px T4)
+      if (y < 40 || y > 76) return null;
       const edgeTol = 7;
       for (let i = 0; i < this.segments.length; i++) {
         const seg = this.segments[i];
@@ -181,12 +190,16 @@
       });
 
       window.addEventListener('resize', () => this.draw());
+      if (typeof ResizeObserver !== 'undefined' && this.wrap) {
+        this._ro = new ResizeObserver(() => this.draw());
+        this._ro.observe(this.wrap);
+      }
     }
 
     draw() {
       if (!this.canvas) return;
       const w = this._canvasWidth();
-      const h = 128;
+      const h = 152;
       const dpr = window.devicePixelRatio || 1;
       if (this.canvas.width !== w * dpr || this.canvas.height !== h * dpr) {
         this.canvas.width = w * dpr;
@@ -202,12 +215,34 @@
       ctx.fillStyle = '#090f1f';
       ctx.fillRect(0, 0, w, h);
 
+      // === TIME RULER (y 0..16) ===
+      ctx.fillStyle = '#0d152a';
+      ctx.fillRect(0, 0, w, 16);
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.24)';
+      ctx.fillRect(0, 16, w, 1);
+      if (this.duration > 0) {
+        const niceSteps = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900];
+        const targetSec = (90 / Math.max(1, w)) * this.duration;
+        const stepSec = niceSteps.find((s) => s >= targetSec) || 900;
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '9.5px Consolas, monospace';
+        for (let t = 0; t <= this.duration; t += stepSec) {
+          const tx = this._timeToX(t, w);
+          ctx.fillStyle = 'rgba(148, 163, 184, 0.35)';
+          ctx.fillRect(tx, 10, 1, 6);
+          if (tx + 36 < w) {
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText(this._fmtRuler(t), tx + 3, 11);
+          }
+        }
+      }
+
       // Track background bands & subtle dividers
       const tracks = [
-        { y: 0, hh: 22, bg: 'rgba(245, 158, 11, 0.04)', label: 'T4 🖼️' },
-        { y: 24, hh: 30, bg: 'rgba(16, 185, 129, 0.04)', label: 'T3 💬' },
-        { y: 56, hh: 42, bg: 'rgba(99, 102, 241, 0.05)', label: 'T2 🎬' },
-        { y: 100, hh: 28, bg: 'rgba(20, 184, 166, 0.04)', label: 'T1 🎵' },
+        { y: 17, hh: 22, bg: 'rgba(245, 158, 11, 0.04)', label: 'T4 🖼️' },
+        { y: 41, hh: 34, bg: 'rgba(16, 185, 129, 0.04)', label: 'T3 💬' },
+        { y: 77, hh: 45, bg: 'rgba(99, 102, 241, 0.05)', label: 'T2 🎬' },
+        { y: 124, hh: 28, bg: 'rgba(20, 184, 166, 0.04)', label: 'T1 🎵' },
       ];
       for (const tr of tracks) {
         ctx.fillStyle = tr.bg;
@@ -221,7 +256,7 @@
         const x1 = this._timeToX(cz.start, w);
         const x2 = this._timeToX(cz.end, w);
         ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
-        ctx.fillRect(x1, 0, Math.max(2, x2 - x1), h);
+        ctx.fillRect(x1, 17, Math.max(2, x2 - x1), h - 17);
       }
 
       // In/Out selection window
@@ -232,75 +267,75 @@
           const x1 = this._timeToX(s, w);
           const x2 = this._timeToX(e, w);
           ctx.fillStyle = 'rgba(245, 158, 11, 0.12)';
-          ctx.fillRect(x1, 0, x2 - x1, h);
+          ctx.fillRect(x1, 17, x2 - x1, h - 17);
           ctx.fillStyle = '#f59e0b';
           ctx.fillRect(x1, 0, 2, h);
           ctx.fillRect(x2 - 2, 0, 2, h);
         }
       }
 
-      // === T4 (y 2..20): Watermark + Photo B-Roll Overlays ===
+      // === T4 (y 19..37): Watermark + Photo B-Roll Overlays ===
       if (this.watermarkEnabled) {
         ctx.fillStyle = 'rgba(245, 158, 11, 0.20)';
-        ctx.fillRect(2, 3, w - 4, 16);
+        ctx.fillRect(2, 20, w - 4, 16);
         ctx.strokeStyle = 'rgba(245, 158, 11, 0.45)';
-        ctx.strokeRect(2.5, 3.5, w - 5, 15);
+        ctx.strokeRect(2.5, 20.5, w - 5, 15);
       }
       for (const br of this.brollOverlays) {
         const x1 = this._timeToX(br.start, w);
         const x2 = Math.max(x1 + 8, this._timeToX(br.end, w));
         ctx.fillStyle = 'rgba(236, 72, 153, 0.52)';
-        ctx.fillRect(x1, 2, x2 - x1, 18);
+        ctx.fillRect(x1, 19, x2 - x1, 18);
         ctx.strokeStyle = '#f472b6';
-        ctx.strokeRect(x1 + 0.5, 2.5, Math.max(1, x2 - x1 - 1), 17);
+        ctx.strokeRect(x1 + 0.5, 19.5, Math.max(1, x2 - x1 - 1), 17);
         if (x2 - x1 > 44) {
           ctx.save();
           ctx.beginPath();
-          ctx.rect(x1 + 3, 2, x2 - x1 - 6, 18);
+          ctx.rect(x1 + 3, 19, x2 - x1 - 6, 18);
           ctx.clip();
           ctx.fillStyle = '#fdf2f8';
           ctx.font = '10px sans-serif';
-          ctx.fillText(`🖼️ ${br.name || 'B-Roll'}`, x1 + 4, 14);
+          ctx.fillText(`🖼️ ${br.name || 'B-Roll'}`, x1 + 4, 31);
           ctx.restore();
         }
       }
 
-      // === T3 (y 26..52): Draggable Subtitle Blocks ===
-      const cueTop = 26;
-      const cueH = 26;
+      // === T3 (y 43..73): Draggable Subtitle Blocks ===
+      const cueTop = 43;
+      const cueH = 30;
       for (let i = 0; i < this.segments.length; i++) {
         const seg = this.segments[i];
         const x1 = this._timeToX(seg.start, w);
         const x2 = Math.max(x1 + 4, this._timeToX(seg.end, w));
         const bw = x2 - x1;
         const isActive = i === this.activeIdx;
-        ctx.fillStyle = isActive ? 'rgba(16, 185, 129, 0.82)' : 'rgba(99, 102, 241, 0.52)';
+        ctx.fillStyle = isActive ? 'rgba(16, 185, 129, 0.84)' : 'rgba(99, 102, 241, 0.54)';
         ctx.fillRect(x1, cueTop, bw, cueH);
         ctx.strokeStyle = isActive ? '#6ee7b7' : 'rgba(199, 210, 254, 0.45)';
         ctx.lineWidth = 1;
         ctx.strokeRect(x1 + 0.5, cueTop + 0.5, Math.max(1, bw - 1), cueH - 1);
 
-        if (bw > 34) {
+        if (bw > 30) {
           ctx.save();
           ctx.beginPath();
           ctx.rect(x1 + 3, cueTop, bw - 6, cueH);
           ctx.clip();
           ctx.fillStyle = '#f8fafc';
-          ctx.font = '10px sans-serif';
-          ctx.fillText(seg.text || `#${i + 1}`, x1 + 4, cueTop + 17);
+          ctx.font = '10.5px sans-serif';
+          ctx.fillText(seg.text || `#${i + 1}`, x1 + 4, cueTop + 19);
           ctx.restore();
         }
       }
 
-      // === T2 (y 56..98): Audio Waveform Peaks ===
-      const waveMid = 77;
-      const waveAmp = 18;
+      // === T2 (y 77..122): Audio Waveform Peaks ===
+      const waveMid = 99;
+      const waveAmp = 20;
       if (this.peaks.length > 0) {
         const step = w / this.peaks.length;
-        ctx.fillStyle = 'rgba(129, 140, 248, 0.78)';
+        ctx.fillStyle = 'rgba(129, 140, 248, 0.82)';
         for (let i = 0; i < this.peaks.length; i++) {
           const barH = Math.max(2, this.peaks[i] * waveAmp * 2);
-          ctx.fillRect(i * step, waveMid - barH / 2, Math.max(1, step - 0.6), barH);
+          ctx.fillRect(i * step, waveMid - barH / 2, Math.max(1, step - 0.5), barH);
         }
       } else {
         ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
@@ -310,12 +345,12 @@
         ctx.stroke();
       }
 
-      // === T1 (y 102..126): BGM Music Track + Auto Audio Ducking Visualizer ===
+      // === T1 (y 126..150): BGM Music Track + Auto Audio Ducking Visualizer ===
       if (this.bgmInfo && this.bgmInfo.enabled && this.bgmInfo.name) {
         ctx.fillStyle = 'rgba(20, 184, 166, 0.26)';
-        ctx.fillRect(2, 103, w - 4, 22);
+        ctx.fillRect(2, 127, w - 4, 22);
         ctx.strokeStyle = 'rgba(45, 212, 191, 0.55)';
-        ctx.strokeRect(2.5, 103.5, w - 5, 21);
+        ctx.strokeRect(2.5, 127.5, w - 5, 21);
 
         // Draw auto-ducking dip curve under every subtitle cue!
         if (this.bgmInfo.auto_ducking) {
@@ -323,29 +358,29 @@
           for (const seg of this.segments) {
             const dx1 = this._timeToX(seg.start, w);
             const dx2 = Math.max(dx1 + 3, this._timeToX(seg.end, w));
-            ctx.fillRect(dx1, 117, dx2 - dx1, 8);
+            ctx.fillRect(dx1, 141, dx2 - dx1, 8);
           }
         }
         ctx.fillStyle = '#99f6e4';
-        ctx.font = '10px sans-serif';
+        ctx.font = '10.5px sans-serif';
         ctx.fillText(
           `🎵 ${this.bgmInfo.name}${this.bgmInfo.auto_ducking ? ' • Auto Ducking ON' : ''}`,
-          44,
-          117
+          46,
+          141
         );
       } else {
         ctx.fillStyle = 'rgba(148, 163, 184, 0.35)';
-        ctx.font = '10px sans-serif';
-        ctx.fillText('🎵 BGM Track (เพิ่มเพลงพื้นหลังในแท็บ 🎚️ สี/สปีด & BGM)', 44, 117);
+        ctx.font = '10.5px sans-serif';
+        ctx.fillText('🎵 BGM Track (เพิ่มเพลงพื้นหลังในแท็บ 🎚️ สี/สปีด & BGM)', 46, 141);
       }
 
       // Track badge pills on far left
       for (const tr of tracks) {
-        ctx.fillStyle = 'rgba(2, 6, 23, 0.78)';
-        ctx.fillRect(2, tr.y + 3, 36, 15);
+        ctx.fillStyle = 'rgba(2, 6, 23, 0.82)';
+        ctx.fillRect(2, tr.y + 3, 38, 16);
         ctx.fillStyle = '#cbd5e1';
-        ctx.font = '9px sans-serif';
-        ctx.fillText(tr.label, 5, tr.y + 13);
+        ctx.font = '9.5px sans-serif';
+        ctx.fillText(tr.label, 5, tr.y + 14);
       }
 
       // Razor Split Markers (amber dashed vertical lines across all tracks)

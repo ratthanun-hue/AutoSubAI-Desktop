@@ -479,6 +479,7 @@
       });
 
       $('btn-add-split-marker')?.addEventListener('click', () => this.addMarkerAtPlayhead());
+      $('wf-razor-split-btn')?.addEventListener('click', () => this.addMarkerAtPlayhead());
       $('btn-clear-split-markers')?.addEventListener('click', () => this.resetSplitMarkers());
       $('btn-auto-split-mins')?.addEventListener('click', () => this.applyAutoSplitByMinutes());
       $('btn-auto-split-equal')?.addEventListener('click', () => this.applyAutoSplitEqualParts());
