@@ -65,8 +65,8 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 9px 16px;
+  gap: 8px;
+  padding: 7px 14px;
   background: rgba(7, 11, 20, 0.94);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
@@ -341,7 +341,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
   grid-template-areas: "editor monitor inspector";
   gap: 10px;
   align-items: stretch;
-  height: clamp(460px, calc(100vh - 332px), 780px);
+  height: clamp(410px, calc(100vh - 355px), 760px);
 }
 .studio-editor-panel {
   grid-area: editor;

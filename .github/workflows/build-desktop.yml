@@ -115,29 +115,29 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.4.1-beta Release
+      - name: Create or update desktop-v1.4.2-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.4.1-beta
-          name: "AutoSubAI Desktop Pro Studio v1.4.1 Beta — Full-Bleed 3-Pane NLE Dock, Wide Program Monitor & Edge-to-Edge 4-Track Timeline"
+          tag_name: desktop-v1.4.2-beta
+          name: "AutoSubAI Desktop Pro Studio v1.4.2 Beta — Built-in Visual User Guide (📖 คู่มือ) & Full-Bleed Pro NLE"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.4.1 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.4.2 Beta)
 
             ### Downloads (All-in-One with Built-in FFmpeg 6.1.1 & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.4.1_x64-setup.exe` (or `AutoSubAI_1.4.1_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.4.1_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.4.1_x64.dmg`
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.4.2_x64-setup.exe` (or `AutoSubAI_1.4.2_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.4.2_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.4.2_x64.dmg`
 
-            ### What's New in v1.4.1 Beta (Pro NLE Layout Ergonomics Upgrade!)
-            - 🖥️ **Full-Bleed Edge-to-Edge 3-Pane NLE Workspace**:
-              - **Left Pane (`305–375px` Compact)**: Subtitle Cue Editor sized perfectly for Thai/Bilingual cues with independent scroll — zero wasted blank space!
-              - **Center Pane (Widest `1fr`)**: Enlarged **WYSIWYG Program Monitor** with aspect-ratio lock (`16:9` / `9:16` / `1:1`), Safe Zones & transport controls
-              - **Right Pane (`350–435px`)**: Dedicated **8-Tab Pro Inspector** docked beside the monitor for instant real-time tuning without page scrolling
-            - 🎞️ **Edge-to-Edge 100% Width 4-Track Visual Timeline (Bottom Dock — 3.5–4.5x Wider!)**:
-              - Spans the entire window width with a crisp **Timecode Ruler**, taller `152px` 4-track canvas (`T4` Watermark/B-Roll, `T3` Draggable Cues, `T2` Waveform + Cut/Razor `[B]`, `T1` BGM + Auto-Ducking), up to **`16x` Zoom**, quick **`🔪 วางเส้นตัด [B]`** toolbar button & automatic `ResizeObserver` redraw!
-            - ⬆️ **Auto-Update**: Existing users on `v1.1.1`–`v1.4.0` will automatically see **`⬆️ Update v1.4.1`** in the top bar!
+            ### 📖 Visual User Guide (คู่มือการใช้งานพร้อมภาพประกอบ)
+            - Read online / Print PDF: **[https://www.thaiautosub.com/guide](https://www.thaiautosub.com/guide)**
+            - GitHub Docs: **[docs/USER_GUIDE.md](https://github.com/ratthanun-hue/AutoSubAI-Desktop/blob/main/docs/USER_GUIDE.md)**
+
+            ### What's New in v1.4.2 Beta
+            - 📖 **1-Click Built-in `📖 คู่มือ / 📖 Guide` Button**: Open the complete visual user manual with annotated screenshots & keyboard shortcuts directly from the top bar!
+            - 🖥️ **Includes Full v1.4.1 Full-Bleed 3-Pane NLE Workspace**: Compact Left Subtitle Editor, Wide Center Monitor, Right 8-Tab Inspector & Edge-to-Edge 4-Track Visual Timeline (with Timecode Ruler, `16x` Zoom & Razor Split `[B]`).
+            - ⬆️ **Auto-Update**: Existing users on `v1.1.1`–`v1.4.1` will automatically see **`⬆️ Update v1.4.2`** in the top bar!
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

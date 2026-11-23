@@ -901,6 +901,7 @@
       state.token = ''; state.profile = null; state.projects = []; state.projectsLoaded = false;
       localStorage.removeItem(STORAGE_KEYS.token); renderAuthUI(); showToast('Signed out');
     });
+    $('open-guide-btn')?.addEventListener('click', () => invokeCmd('open_cloud_studio', { url: `${state.apiBase}/guide`, token: null }).catch((e) => showToast(String(e), 'err')));
     $('open-cloud-btn').addEventListener('click', () => invokeCmd('open_cloud_studio', { url: `${state.apiBase}/app`, token: state.token || null }).catch((e) => showToast(String(e), 'err')));
 
     $('pick-files-btn').addEventListener('click', async () => {
