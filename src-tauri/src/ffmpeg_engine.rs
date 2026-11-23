@@ -88,6 +88,74 @@ impl Default for WatermarkConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+pub struct ColorSpeedConfig {
+    pub brightness: f64, // -0.4..0.4 (0.0 = neutral)
+    pub contrast: f64,   // 0.5..1.8 (1.0 = neutral)
+    pub saturation: f64, // 0.0..2.0 (1.0 = neutral)
+    pub speed: f64,      // 0.5..2.0 (1.0 = normal)
+}
+
+impl Default for ColorSpeedConfig {
+    fn default() -> Self {
+        Self {
+            brightness: 0.0,
+            contrast: 1.0,
+            saturation: 1.0,
+            speed: 1.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct BgmAudioConfig {
+    pub enabled: bool,
+    pub bgm_path: String,
+    pub dialogue_volume: f64, // 0.0..2.0
+    pub bgm_volume: f64,      // 0.0..1.0
+    pub auto_ducking: bool,
+}
+
+impl Default for BgmAudioConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            bgm_path: String::new(),
+            dialogue_volume: 1.0,
+            bgm_volume: 0.30,
+            auto_ducking: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct BrollOverlayItem {
+    pub image_path: String,
+    pub start: f64,
+    pub end: f64,
+    pub x_pct: f64,     // 0..90
+    pub y_pct: f64,     // 0..90
+    pub width_pct: f64, // 10..85
+    pub opacity: f64,   // 0.1..1.0
+}
+
+impl Default for BrollOverlayItem {
+    fn default() -> Self {
+        Self {
+            image_path: String::new(),
+            start: 0.0,
+            end: 5.0,
+            x_pct: 58.0,
+            y_pct: 8.0,
+            width_pct: 36.0,
+            opacity: 1.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub struct StudioRenderRequest {
     pub video_path: String,
     pub output_path: Option<String>,
@@ -99,6 +167,9 @@ pub struct StudioRenderRequest {
     pub watermark: WatermarkConfig,
     pub intro_path: Option<String>,
     pub outro_path: Option<String>,
+    pub color_speed: ColorSpeedConfig,
+    pub bgm: BgmAudioConfig,
+    pub broll_overlays: Vec<BrollOverlayItem>,
 }
 
 impl Default for StudioRenderRequest {
@@ -114,6 +185,9 @@ impl Default for StudioRenderRequest {
             watermark: WatermarkConfig::default(),
             intro_path: None,
             outro_path: None,
+            color_speed: ColorSpeedConfig::default(),
+            bgm: BgmAudioConfig::default(),
+            broll_overlays: Vec::new(),
         }
     }
 }
@@ -524,13 +598,15 @@ pub async fn render_studio_video(
         });
     }
 
-    // Hardsub WYSIWYG Mode: Probe resolution -> Scale -> Delogo Blur/Box -> ASS Style -> Watermark PNG
+    // Hardsub WYSIWYG Mode: Probe -> Scale -> Color Grading -> Delogo -> B-Roll PiP -> Speed -> ASS Style -> Watermark -> BGM Audio Ducking
     let probe = probe_media(&req.video_path).await?;
     let mut cur_w = probe.width.unwrap_or(1280);
     let mut cur_h = probe.height.unwrap_or(720);
 
     let mut chains: Vec<String> = Vec::new();
     let mut cur_label = "[0:v]".to_string();
+    let mut extra_inputs: Vec<(Vec<String>, String)> = Vec::new();
+    let mut next_input_idx: usize = 1;
 
     // 1. Optional target resolution scaling
     let target_h: Option<u32> = match req.resolution.trim().to_lowercase().as_str() {
@@ -550,6 +626,18 @@ pub async fn render_studio_video(
                 cur_h = scaled_h;
             }
         }
+    }
+
+    // 1.5 Optional Color Grading (Brightness / Contrast / Saturation)
+    let br = req.color_speed.brightness.clamp(-0.4, 0.4);
+    let ct = req.color_speed.contrast.clamp(0.5, 1.8);
+    let sa = req.color_speed.saturation.clamp(0.0, 2.0);
+    if br.abs() > 0.005 || (ct - 1.0).abs() > 0.005 || (sa - 1.0).abs() > 0.005 {
+        chains.push(format!(
+            "{}eq=brightness={:.3}:contrast={:.3}:saturation={:.3}[v_eq]",
+            cur_label, br, ct, sa
+        ));
+        cur_label = "[v_eq]".to_string();
     }
 
     // 2. Optional Delogo / Cover Bar (blur or solid box over original hardcoded subs)
@@ -584,8 +672,52 @@ pub async fn render_studio_video(
         }
     }
 
-    // 3. WYSIWYG .ASS Subtitle Burn-in (PlayRes matches exact output cur_w x cur_h)
-    let ass_doc = build_ass_document(&req.cues, &req.style, cur_w, cur_h);
+    // 2.5 Optional Playback/Export Speed (0.5x..2.0x) with automatic Lip-Sync subtitle timestamp scaling
+    let speed = req.color_speed.speed.clamp(0.5, 2.0);
+    let has_speed = (speed - 1.0).abs() > 0.01;
+    if has_speed {
+        chains.push(format!("{}setpts=PTS/{:.4}[v_spd]", cur_label, speed));
+        cur_label = "[v_spd]".to_string();
+    }
+
+    // 2.8 Optional Timed Photo B-Roll / Picture-in-Picture Overlays
+    for (bi, broll) in req.broll_overlays.iter().enumerate() {
+        let img_p = broll.image_path.trim();
+        if img_p.is_empty() || !Path::new(img_p).is_file() || broll.end <= broll.start + 0.05 {
+            continue;
+        }
+        let idx = next_input_idx;
+        next_input_idx += 1;
+        extra_inputs.push((Vec::new(), img_p.to_string()));
+        let bw = (((cur_w as f64) * broll.width_pct.clamp(8.0, 95.0) / 100.0).round() as u32).max(48) & !1;
+        let bx = ((cur_w as f64) * broll.x_pct.clamp(0.0, 95.0) / 100.0).round() as u32;
+        let by = ((cur_h as f64) * broll.y_pct.clamp(0.0, 95.0) / 100.0).round() as u32;
+        let bop = broll.opacity.clamp(0.1, 1.0);
+        let st = (broll.start.max(0.0)) / speed;
+        let en = (broll.end.max(broll.start + 0.1)) / speed;
+        chains.push(format!(
+            "[{idx}:v]format=rgba,scale={bw}:-1,colorchannelmixer=aa={bop:.2}[br_img_{bi}];{cur}[br_img_{bi}]overlay=x={bx}:y={by}:enable='between(t,{st:.3},{en:.3})'[v_br_{bi}]",
+            idx = idx, bw = bw, bop = bop, bi = bi, cur = cur_label, bx = bx, by = by, st = st, en = en
+        ));
+        cur_label = format!("[v_br_{}]", bi);
+    }
+
+    // 3. WYSIWYG .ASS Subtitle Burn-in (auto-scaled if speed != 1.0)
+    let scaled_cues: Vec<CueItem> = if has_speed {
+        req.cues
+            .iter()
+            .map(|c| CueItem {
+                start: c.start / speed,
+                end: c.end / speed,
+                text: c.text.clone(),
+                secondary_text: c.secondary_text.clone(),
+            })
+            .collect()
+    } else {
+        req.cues.clone()
+    };
+
+    let ass_doc = build_ass_document(&scaled_cues, &req.style, cur_w, cur_h);
     let mut temp_ass = std::env::temp_dir();
     temp_ass.push(format!("autosub_wysiwyg_{}.ass", ts));
     tokio::fs::write(&temp_ass, ass_doc.as_bytes())
@@ -605,10 +737,13 @@ pub async fn render_studio_video(
     cur_label = "[v_sub]".to_string();
 
     // 4. Optional Channel Watermark PNG Overlay
-    let wm_path_opt = if req.watermark.enabled
+    if req.watermark.enabled
         && !req.watermark.image_path.trim().is_empty()
         && Path::new(req.watermark.image_path.trim()).is_file()
     {
+        let wm_idx = next_input_idx;
+        next_input_idx += 1;
+        extra_inputs.push((Vec::new(), req.watermark.image_path.trim().to_string()));
         let wm_w = (((cur_w as f64) * req.watermark.width_pct.clamp(4.0, 35.0) / 100.0).round() as u32)
             .max(32)
             & !1;
@@ -621,14 +756,70 @@ pub async fn render_studio_video(
             _ => format!("W-w-{}:{}", margin, margin),
         };
         chains.push(format!(
-            "[1:v]format=rgba,scale={}:-1,colorchannelmixer=aa={:.2}[wm_img];{}[wm_img]overlay={}[v_wm]",
-            wm_w, wm_op, cur_label, coords
+            "[{}:v]format=rgba,scale={}:-1,colorchannelmixer=aa={:.2}[wm_img];{}[wm_img]overlay={}[v_wm]",
+            wm_idx, wm_w, wm_op, cur_label, coords
         ));
         cur_label = "[v_wm]".to_string();
-        Some(req.watermark.image_path.trim().to_string())
-    } else {
-        None
-    };
+    }
+
+    // 5. Optional Audio Speed, Dialogue Volume & BGM Track with Auto Audio Ducking (sidechaincompress)
+    let src_has_audio = probe_has_audio_stream(&ffmpeg, &req.video_path).await;
+    let use_bgm = req.bgm.enabled
+        && !req.bgm.bgm_path.trim().is_empty()
+        && Path::new(req.bgm.bgm_path.trim()).is_file();
+    let dlg_vol = req.bgm.dialogue_volume.clamp(0.0, 2.0);
+    let bgm_vol = req.bgm.bgm_volume.clamp(0.02, 1.0);
+    let need_audio_filter = has_speed || use_bgm || (dlg_vol - 1.0).abs() > 0.02;
+
+    let mut audio_map_label: Option<String> = None;
+    let mut use_shortest = false;
+
+    if need_audio_filter {
+        if use_bgm {
+            let bgm_idx = next_input_idx;
+            extra_inputs.push((vec!["-stream_loop".to_string(), "-1".to_string()], req.bgm.bgm_path.trim().to_string()));
+            if src_has_audio {
+                let mut dlg_filters: Vec<String> = Vec::new();
+                if has_speed {
+                    dlg_filters.push(format!("atempo={:.4}", speed));
+                }
+                if (dlg_vol - 1.0).abs() > 0.02 {
+                    dlg_filters.push(format!("volume={:.2}", dlg_vol));
+                }
+                dlg_filters.push("aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo".to_string());
+                chains.push(format!("[0:a]{}[a_dlg]", dlg_filters.join(",")));
+                chains.push(format!(
+                    "[{}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume={:.2}[a_bgm]",
+                    bgm_idx, bgm_vol
+                ));
+                if req.bgm.auto_ducking {
+                    chains.push("[a_dlg]asplit=2[a_dlg_mix][a_dlg_sc]".to_string());
+                    chains.push("[a_bgm][a_dlg_sc]sidechaincompress=threshold=0.03:ratio=6:attack=80:release=450[a_bgm_duck]".to_string());
+                    chains.push("[a_dlg_mix][a_bgm_duck]amix=inputs=2:duration=first:normalize=0[a_out]".to_string());
+                } else {
+                    chains.push("[a_dlg][a_bgm]amix=inputs=2:duration=first:normalize=0[a_out]".to_string());
+                }
+                audio_map_label = Some("[a_out]".to_string());
+            } else {
+                chains.push(format!(
+                    "[{}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume={:.2}[a_out]",
+                    bgm_idx, bgm_vol
+                ));
+                audio_map_label = Some("[a_out]".to_string());
+                use_shortest = true;
+            }
+        } else if src_has_audio {
+            let mut dlg_filters: Vec<String> = Vec::new();
+            if has_speed {
+                dlg_filters.push(format!("atempo={:.4}", speed));
+            }
+            if (dlg_vol - 1.0).abs() > 0.02 {
+                dlg_filters.push(format!("volume={:.2}", dlg_vol));
+            }
+            chains.push(format!("[0:a]{}[a_out]", dlg_filters.join(",")));
+            audio_map_label = Some("[a_out]".to_string());
+        }
+    }
 
     let filter_complex = chains.join(";");
     let has_intro = req
@@ -643,12 +834,14 @@ pub async fn render_studio_video(
         .unwrap_or(false);
 
     if !has_intro && !has_outro {
-        let res = run_h264_encode_with_fallback(
+        let res = run_h264_encode_multi_input(
             &ffmpeg,
             &req.video_path,
-            wm_path_opt.as_deref(),
+            &extra_inputs,
             &filter_complex,
-            Some(&cur_label),
+            &cur_label,
+            audio_map_label.as_deref(),
+            use_shortest,
             out_str,
             "hardsub",
         )
@@ -657,19 +850,18 @@ pub async fn render_studio_video(
         return res;
     }
 
-    // Channel Intro / Outro Stitch Mode:
-    // 1) Render Main Episode with Delogo + WYSIWYG Subtitles + Watermark to temp file
-    // 2) Stitch normalized Intro + Main + Outro cleanly (zero subtitle bleed onto Intro/Outro!)
     let mut temp_main = std::env::temp_dir();
     temp_main.push(format!("autosub_main_stitch_{}.mp4", ts));
     let temp_main_str = temp_main.to_str().ok_or("Invalid temp main path")?;
 
-    let main_res = run_h264_encode_with_fallback(
+    let main_res = run_h264_encode_multi_input(
         &ffmpeg,
         &req.video_path,
-        wm_path_opt.as_deref(),
+        &extra_inputs,
         &filter_complex,
-        Some(&cur_label),
+        &cur_label,
+        audio_map_label.as_deref(),
+        use_shortest,
         temp_main_str,
         "hardsub",
     )
@@ -689,6 +881,93 @@ pub async fn render_studio_video(
     let stitch_res = stitch_video_segments(&ffmpeg, &stitch_inputs, cur_w, cur_h, out_str, &main_ok.encoder_used).await;
     let _ = tokio::fs::remove_file(&temp_main).await;
     stitch_res
+}
+
+async fn run_h264_encode_multi_input(
+    ffmpeg: &str,
+    video_path: &str,
+    extra_inputs: &[(Vec<String>, String)],
+    filter_complex: &str,
+    map_video_label: &str,
+    map_audio_label: Option<&str>,
+    use_shortest: bool,
+    out_str: &str,
+    mode_label: &str,
+) -> Result<HardsubResult, String> {
+    #[cfg(target_os = "macos")]
+    let encoders: Vec<(&str, Vec<&str>)> = vec![
+        ("h264_videotoolbox", vec!["-c:v", "h264_videotoolbox", "-b:v", "5M"]),
+        ("libx264", vec!["-c:v", "libx264", "-preset", "veryfast", "-crf", "21"]),
+    ];
+    #[cfg(target_os = "windows")]
+    let encoders: Vec<(&str, Vec<&str>)> = vec![
+        ("h264_nvenc", vec!["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "23"]),
+        ("libx264", vec!["-c:v", "libx264", "-preset", "veryfast", "-crf", "21"]),
+    ];
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let encoders: Vec<(&str, Vec<&str>)> = vec![
+        ("libx264", vec!["-c:v", "libx264", "-preset", "veryfast", "-crf", "21"]),
+    ];
+
+    let mut last_err = String::new();
+    for (enc_name, enc_args) in encoders {
+        let mut cmd = Command::new(ffmpeg);
+        cmd.args(["-y", "-i", video_path]);
+        for (pre_args, path) in extra_inputs {
+            for a in pre_args {
+                cmd.arg(a);
+            }
+            cmd.args(["-i", path]);
+        }
+        cmd.args(["-filter_complex", filter_complex, "-map", map_video_label]);
+        if let Some(a_lbl) = map_audio_label {
+            cmd.args(["-map", a_lbl]);
+        } else {
+            cmd.args(["-map", "0:a?"]);
+        }
+        if use_shortest {
+            cmd.arg("-shortest");
+        }
+        cmd.args(&enc_args);
+        cmd.args([
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
+            out_str,
+        ]);
+        #[cfg(target_os = "windows")]
+        {
+            cmd.creation_flags(0x08000000);
+        }
+
+        match cmd.output().await {
+            Ok(output) if output.status.success() => {
+                return Ok(HardsubResult {
+                    output_path: out_str.to_string(),
+                    encoder_used: enc_name.to_string(),
+                    mode: mode_label.to_string(),
+                });
+            }
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                last_err = stderr
+                    .chars()
+                    .rev()
+                    .take(320)
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect::<String>();
+            }
+            Err(e) => last_err = e.to_string(),
+        }
+    }
+    Err(format!("เรนเดอร์วิดีโอไม่สำเร็จ: {}", last_err))
 }
 
 async fn stitch_video_segments(
@@ -2226,5 +2505,212 @@ pub async fn merge_media_clips(req: MergeMediaRequest) -> Result<MergeMediaResul
         clip_count: req.clips.len(),
         mode: used_mode,
         encoder_used,
+    })
+}
+
+// =========================================================================
+// PHASE 3 (v1.4.0): 1-CLICK VIRAL THUMBNAIL MAKER (THAI LIBASS TYPOGRAPHY)
+// =========================================================================
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct ThumbnailExportRequest {
+    pub video_path: String,
+    pub timestamp_sec: f64,
+    pub headline: String,
+    pub subline: String,
+    pub font_family: String,
+    pub headline_color: String,
+    pub aspect: String, // "16:9" | "9:16"
+    pub format: String, // "jpg" | "png"
+    pub color_speed: ColorSpeedConfig,
+    pub watermark: WatermarkConfig,
+    pub output_path: Option<String>,
+}
+
+impl Default for ThumbnailExportRequest {
+    fn default() -> Self {
+        Self {
+            video_path: String::new(),
+            timestamp_sec: 2.0,
+            headline: String::new(),
+            subline: String::new(),
+            font_family: "Prompt".to_string(),
+            headline_color: "#fde047".to_string(),
+            aspect: "16:9".to_string(),
+            format: "jpg".to_string(),
+            color_speed: ColorSpeedConfig::default(),
+            watermark: WatermarkConfig::default(),
+            output_path: None,
+        }
+    }
+}
+
+pub async fn export_viral_thumbnail(
+    app: &AppHandle,
+    req: ThumbnailExportRequest,
+) -> Result<HardsubResult, String> {
+    let (ffmpeg, _) = resolve_ffmpeg_binary()
+        .ok_or_else(|| "ไม่พบ FFmpeg ในเครื่อง".to_string())?;
+    let src = Path::new(&req.video_path);
+    if !src.is_file() {
+        return Err("ไม่พบไฟล์วิดีโอต้นฉบับในเครื่อง".to_string());
+    }
+
+    let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("video");
+    let parent = src.parent().unwrap_or_else(|| Path::new("."));
+    let ext = if req.format.trim().eq_ignore_ascii_case("png") { "png" } else { "jpg" };
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let out_path = match req.output_path.as_deref().map(str::trim) {
+        Some(p) if !p.is_empty() => PathBuf::from(p),
+        _ => parent.join(format!("{}_thumbnail_{}.{}", stem, ts % 10000, ext)),
+    };
+    let out_str = out_path.to_str().ok_or("Invalid thumbnail path")?;
+
+    let (w, h) = if req.aspect.trim() == "9:16" {
+        (1080u32, 1920u32)
+    } else {
+        (1920u32, 1080u32)
+    };
+
+    let mut chains: Vec<String> = Vec::new();
+    let mut cur = "[0:v]".to_string();
+
+    // Scale + crop fill cleanly to crisp 1920x1080 or 1080x1920
+    chains.push(format!(
+        "{}scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1[t_sc]",
+        cur, w = w, h = h
+    ));
+    cur = "[t_sc]".to_string();
+
+    let br = req.color_speed.brightness.clamp(-0.4, 0.4);
+    let ct = req.color_speed.contrast.clamp(0.5, 1.8);
+    let sa = req.color_speed.saturation.clamp(0.0, 2.0);
+    if br.abs() > 0.005 || (ct - 1.0).abs() > 0.005 || (sa - 1.0).abs() > 0.005 {
+        chains.push(format!(
+            "{}eq=brightness={:.3}:contrast={:.3}:saturation={:.3}[t_eq]",
+            cur, br, ct, sa
+        ));
+        cur = "[t_eq]".to_string();
+    }
+
+    // Subtle dark gradient bar at bottom for viral headline readability
+    let bar_h = (h as f64 * 0.34).round() as u32;
+    let bar_y = h.saturating_sub(bar_h);
+    chains.push(format!(
+        "{}drawbox=x=0:y={}:w={}:h={}:color=0x000000@0.52:t=fill[t_bar]",
+        cur, bar_y, w, bar_h
+    ));
+    cur = "[t_bar]".to_string();
+
+    // Build ASS document with crisp bold Thai headline + subline at t=0..5
+    let mut temp_ass: Option<PathBuf> = None;
+    let hl = req.headline.trim();
+    let sl = req.subline.trim();
+    if !hl.is_empty() || !sl.is_empty() {
+        let mut style = SubtitleStyleConfig::default();
+        style.font_family = if req.font_family.trim().is_empty() {
+            "Prompt".to_string()
+        } else {
+            req.font_family.trim().to_string()
+        };
+        style.font_size = if w > h { 58.0 } else { 44.0 };
+        style.font_weight = 800;
+        style.font_color = req.headline_color.trim().to_string();
+        style.bg_opacity = 0.0;
+        style.stroke_color = "#000000".to_string();
+        style.stroke_width = 5.0;
+        style.align = "center".to_string();
+        style.pos_y = 84.0;
+        style.bilingual_enabled = !sl.is_empty();
+        style.secondary_color = "#ffffff".to_string();
+        style.secondary_scale = 0.56;
+
+        let cue = CueItem {
+            start: 0.0,
+            end: 10.0,
+            text: hl.to_string(),
+            secondary_text: sl.to_string(),
+        };
+        let ass_doc = build_ass_document(&[cue], &style, w, h);
+        let ass_p = std::env::temp_dir().join(format!("autosub_thumb_{}.ass", ts));
+        tokio::fs::write(&ass_p, ass_doc.as_bytes())
+            .await
+            .map_err(|e| e.to_string())?;
+        let esc_ass = escape_ffmpeg_filter_path(ass_p.to_str().unwrap_or(""));
+        if let Some(fdir) = find_bundled_fonts_dir(app) {
+            let esc_fd = escape_ffmpeg_filter_path(&fdir);
+            chains.push(format!("{}ass='{}':fontsdir='{}'[t_txt]", cur, esc_ass, esc_fd));
+        } else {
+            chains.push(format!("{}ass='{}'[t_txt]", cur, esc_ass));
+        }
+        cur = "[t_txt]".to_string();
+        temp_ass = Some(ass_p);
+    }
+
+    let wm_path_opt = if req.watermark.enabled
+        && !req.watermark.image_path.trim().is_empty()
+        && Path::new(req.watermark.image_path.trim()).is_file()
+    {
+        let wm_w = (((w as f64) * req.watermark.width_pct.clamp(5.0, 35.0) / 100.0).round() as u32).max(48) & !1;
+        let wm_op = req.watermark.opacity.clamp(0.1, 1.0);
+        let margin = 36u32;
+        let coords = match req.watermark.position.trim().to_lowercase().as_str() {
+            "top-left" => format!("{}:{}", margin, margin),
+            "bottom-left" => format!("{}:H-h-{}", margin, margin),
+            "bottom-right" => format!("W-w-{}:H-h-{}", margin, margin),
+            _ => format!("W-w-{}:{}", margin, margin),
+        };
+        chains.push(format!(
+            "[1:v]format=rgba,scale={}:-1,colorchannelmixer=aa={:.2}[twm];{}[twm]overlay={}[t_wm]",
+            wm_w, wm_op, cur, coords
+        ));
+        cur = "[t_wm]".to_string();
+        Some(req.watermark.image_path.trim().to_string())
+    } else {
+        None
+    };
+
+    let ss_str = format!("{:.3}", req.timestamp_sec.max(0.0));
+    let fc = chains.join(";");
+    let mut cmd = Command::new(&ffmpeg);
+    cmd.args(["-y", "-ss", &ss_str, "-i", &req.video_path]);
+    if let Some(ref wm) = wm_path_opt {
+        cmd.args(["-i", wm]);
+    }
+    cmd.args(["-filter_complex", &fc, "-map", &cur, "-frames:v", "1"]);
+    if ext == "jpg" {
+        cmd.args(["-q:v", "2"]);
+    }
+    cmd.arg(out_str);
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(0x08000000);
+    }
+
+    let out = cmd
+        .output()
+        .await
+        .map_err(|e| format!("สร้างปกคลิปไม่สำเร็จ: {}", e))?;
+    if let Some(p) = temp_ass {
+        let _ = tokio::fs::remove_file(p).await;
+    }
+
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format!(
+            "ส่งออกปกคลิปไม่สำเร็จ: {}",
+            stderr.chars().rev().take(240).collect::<String>().chars().rev().collect::<String>()
+        ));
+    }
+
+    Ok(HardsubResult {
+        output_path: out_str.to_string(),
+        encoder_used: format!("ffmpeg-{}", ext),
+        mode: "thumbnail".to_string(),
     })
 }

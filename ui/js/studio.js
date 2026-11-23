@@ -333,12 +333,12 @@
         }
       });
 
-      // 6-Tab Pro Inspector Switcher
+      // 8-Tab Pro Inspector Switcher
       document.querySelectorAll('.insp-tab').forEach((tab) => {
         tab.addEventListener('click', () => {
           const target = tab.dataset.inspTab;
           document.querySelectorAll('.insp-tab').forEach((t) => t.classList.toggle('active', t === tab));
-          ['style', 'delogo', 'watermark', 'bilingual', 'cutshorts', 'glossary'].forEach((k) => {
+          ['style', 'delogo', 'watermark', 'bilingual', 'cutshorts', 'colorbgm', 'brollthumb', 'glossary'].forEach((k) => {
             const pane = $(`insp-pane-${k}`);
             if (pane) pane.classList.toggle('hidden', k !== target);
           });
@@ -1007,6 +1007,7 @@
 
     renderTimeline() {
       if (!this.waveform) return;
+      const proMeta = this.host.getProTimelineMeta ? this.host.getProTimelineMeta() : {};
       this.waveform.setData({
         peaks: this.waveformPeaks,
         duration: this._effectiveDuration(),
@@ -1016,6 +1017,9 @@
         outPoint: this.outPoint,
         cutZones: this.cutZones,
         splitMarkers: this.splitMarkers || [],
+        brollOverlays: proMeta.brollOverlays || [],
+        bgmInfo: proMeta.bgmInfo || { enabled: false, name: '', auto_ducking: true },
+        watermarkEnabled: !!(this.watermark && this.watermark.enabled && this.watermark.image_path),
       });
     }
 
@@ -1045,6 +1049,9 @@
 
       if (this.waveform) {
         this.waveform.setCurrentTime(t, found);
+      }
+      if (this.host.onTimeUpdateHook) {
+        this.host.onTimeUpdateHook(t, found);
       }
 
       // If paused at t=0 and no active cue, show sample cue 0 preview so Style Inspector changes are immediately visible!
@@ -1533,6 +1540,7 @@
       btn.textContent = '⏳ Rendering MP4...';
 
       try {
+        const proCfg = this.host.getProRenderConfig ? this.host.getProRenderConfig() : {};
         const res = await this.host.invokeCmd('render_studio_video', {
           req: {
             video_path: videoPath,
@@ -1545,6 +1553,9 @@
             watermark: this.watermark,
             intro_path: this.branding.intro_path || null,
             outro_path: this.branding.outro_path || null,
+            color_speed: proCfg.color_speed,
+            bgm: proCfg.bgm,
+            broll_overlays: proCfg.broll_overlays,
           },
         });
         $('modal-export').classList.add('hidden');

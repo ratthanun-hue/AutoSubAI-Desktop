@@ -1177,6 +1177,14 @@ async fn merge_media_clips(
     ffmpeg_engine::merge_media_clips(req).await
 }
 
+#[tauri::command]
+async fn export_viral_thumbnail(
+    app: tauri::AppHandle,
+    req: ffmpeg_engine::ThumbnailExportRequest,
+) -> Result<ffmpeg_engine::HardsubResult, String> {
+    ffmpeg_engine::export_viral_thumbnail(&app, req).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1203,6 +1211,7 @@ pub fn run() {
             split_media_parts,
             demux_extract_track,
             merge_media_clips,
+            export_viral_thumbnail,
             api_login,
             api_google_browser_login,
             api_get_profile,

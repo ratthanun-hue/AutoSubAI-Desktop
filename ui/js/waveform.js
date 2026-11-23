@@ -2,7 +2,11 @@
   'use strict';
 
   /**
-   * Interactive HTML5 Canvas Audio Waveform + Subtitle Block Drag Editor + Trim/Cut Markers
+   * CapCut / Premiere-Style 4-Track Visual Timeline Canvas (v1.4.0):
+   * - T4 (y 0..22):   Watermark & Photo B-Roll / PiP Overlays
+   * - T3 (y 24..54):  Draggable Subtitle Cue Blocks (drag start/end/move)
+   * - T2 (y 56..98):  Audio Waveform + Cut-Out Zones + In/Out + Razor Split Markers
+   * - T1 (y 100..128): BGM Audio Track + Auto Audio Ducking Visualizer
    */
   class DesktopWaveformTimeline {
     constructor(canvasEl, wrapEl, callbacks) {
@@ -17,8 +21,11 @@
       this.zoom = 1; // 1 | 2 | 4 | 8
       this.inPoint = null;
       this.outPoint = null;
-      this.cutZones = []; // [{ start, end }]
+      this.cutZones = [];     // [{ start, end }]
       this.splitMarkers = []; // [sec, ...]
+      this.brollOverlays = []; // [{ start, end, name }]
+      this.bgmInfo = { enabled: false, name: '', auto_ducking: true };
+      this.watermarkEnabled = false;
 
       // Drag state
       this.dragMode = null; // 'start' | 'end' | 'move' | 'scrub'
@@ -30,7 +37,19 @@
       this._bindEvents();
     }
 
-    setData({ peaks, duration, segments, activeIdx, inPoint, outPoint, cutZones, splitMarkers }) {
+    setData({
+      peaks,
+      duration,
+      segments,
+      activeIdx,
+      inPoint,
+      outPoint,
+      cutZones,
+      splitMarkers,
+      brollOverlays,
+      bgmInfo,
+      watermarkEnabled,
+    }) {
       if (peaks !== undefined) this.peaks = peaks || [];
       if (duration !== undefined && duration > 0) this.duration = duration;
       if (segments !== undefined) this.segments = segments || [];
@@ -39,6 +58,9 @@
       if (outPoint !== undefined) this.outPoint = outPoint;
       if (cutZones !== undefined) this.cutZones = cutZones || [];
       if (splitMarkers !== undefined) this.splitMarkers = splitMarkers || [];
+      if (brollOverlays !== undefined) this.brollOverlays = brollOverlays || [];
+      if (bgmInfo !== undefined) this.bgmInfo = bgmInfo || { enabled: false, name: '', auto_ducking: true };
+      if (watermarkEnabled !== undefined) this.watermarkEnabled = !!watermarkEnabled;
       this.draw();
     }
 
@@ -67,9 +89,9 @@
       return (t / this.duration) * w;
     }
 
-    _hitTestCue(x, y, w, h) {
-      // Cue strip sits in bottom 44% of canvas
-      if (y < h * 0.50) return null;
+    _hitTestCue(x, y, w) {
+      // T3 Subtitle track sits at y = 24..54
+      if (y < 23 || y > 55) return null;
       const edgeTol = 7;
       for (let i = 0; i < this.segments.length; i++) {
         const seg = this.segments[i];
@@ -90,9 +112,8 @@
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         const w = rect.width;
-        const h = rect.height;
 
-        const hit = this._hitTestCue(x, y, w, h);
+        const hit = this._hitTestCue(x, y, w);
         if (hit) {
           this.dragMode = hit.mode;
           this.dragCueIdx = hit.idx;
@@ -112,10 +133,9 @@
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         const w = rect.width;
-        const h = rect.height;
 
         if (!this.dragMode) {
-          const hit = this._hitTestCue(x, y, w, h);
+          const hit = this._hitTestCue(x, y, w);
           if (hit && (hit.mode === 'start' || hit.mode === 'end')) {
             this.canvas.style.cursor = 'ew-resize';
           } else if (hit && hit.mode === 'move') {
@@ -166,7 +186,7 @@
     draw() {
       if (!this.canvas) return;
       const w = this._canvasWidth();
-      const h = 76;
+      const h = 128;
       const dpr = window.devicePixelRatio || 1;
       if (this.canvas.width !== w * dpr || this.canvas.height !== h * dpr) {
         this.canvas.width = w * dpr;
@@ -179,25 +199,39 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       // Background
-      ctx.fillStyle = '#0b1224';
+      ctx.fillStyle = '#090f1f';
       ctx.fillRect(0, 0, w, h);
 
-      // Cut-out red zones
+      // Track background bands & subtle dividers
+      const tracks = [
+        { y: 0, hh: 22, bg: 'rgba(245, 158, 11, 0.04)', label: 'T4 🖼️' },
+        { y: 24, hh: 30, bg: 'rgba(16, 185, 129, 0.04)', label: 'T3 💬' },
+        { y: 56, hh: 42, bg: 'rgba(99, 102, 241, 0.05)', label: 'T2 🎬' },
+        { y: 100, hh: 28, bg: 'rgba(20, 184, 166, 0.04)', label: 'T1 🎵' },
+      ];
+      for (const tr of tracks) {
+        ctx.fillStyle = tr.bg;
+        ctx.fillRect(0, tr.y, w, tr.hh);
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.16)';
+        ctx.fillRect(0, tr.y + tr.hh, w, 1);
+      }
+
+      // Cut-out red zones across all tracks
       for (const cz of this.cutZones) {
         const x1 = this._timeToX(cz.start, w);
         const x2 = this._timeToX(cz.end, w);
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.28)';
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
         ctx.fillRect(x1, 0, Math.max(2, x2 - x1), h);
       }
 
-      // In/Out highlighted selection window
+      // In/Out selection window
       if (this.inPoint != null || this.outPoint != null) {
         const s = this.inPoint != null ? this.inPoint : 0;
         const e = this.outPoint != null ? this.outPoint : this.duration;
         if (e > s) {
           const x1 = this._timeToX(s, w);
           const x2 = this._timeToX(e, w);
-          ctx.fillStyle = 'rgba(245, 158, 11, 0.14)';
+          ctx.fillStyle = 'rgba(245, 158, 11, 0.12)';
           ctx.fillRect(x1, 0, x2 - x1, h);
           ctx.fillStyle = '#f59e0b';
           ctx.fillRect(x1, 0, 2, h);
@@ -205,40 +239,44 @@
         }
       }
 
-      // Waveform peaks in top 52%
-      const waveMid = h * 0.27;
-      const waveAmp = h * 0.23;
-      if (this.peaks.length > 0) {
-        const step = w / this.peaks.length;
-        ctx.fillStyle = 'rgba(99, 102, 241, 0.72)';
-        for (let i = 0; i < this.peaks.length; i++) {
-          const barH = Math.max(2, this.peaks[i] * waveAmp * 2);
-          ctx.fillRect(i * step, waveMid - barH / 2, Math.max(1, step - 0.6), barH);
+      // === T4 (y 2..20): Watermark + Photo B-Roll Overlays ===
+      if (this.watermarkEnabled) {
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.20)';
+        ctx.fillRect(2, 3, w - 4, 16);
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.45)';
+        ctx.strokeRect(2.5, 3.5, w - 5, 15);
+      }
+      for (const br of this.brollOverlays) {
+        const x1 = this._timeToX(br.start, w);
+        const x2 = Math.max(x1 + 8, this._timeToX(br.end, w));
+        ctx.fillStyle = 'rgba(236, 72, 153, 0.52)';
+        ctx.fillRect(x1, 2, x2 - x1, 18);
+        ctx.strokeStyle = '#f472b6';
+        ctx.strokeRect(x1 + 0.5, 2.5, Math.max(1, x2 - x1 - 1), 17);
+        if (x2 - x1 > 44) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x1 + 3, 2, x2 - x1 - 6, 18);
+          ctx.clip();
+          ctx.fillStyle = '#fdf2f8';
+          ctx.font = '10px sans-serif';
+          ctx.fillText(`🖼️ ${br.name || 'B-Roll'}`, x1 + 4, 14);
+          ctx.restore();
         }
-      } else {
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
-        ctx.beginPath();
-        ctx.moveTo(0, waveMid);
-        ctx.lineTo(w, waveMid);
-        ctx.stroke();
       }
 
-      // Divider line
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.18)';
-      ctx.fillRect(0, h * 0.52, w, 1);
-
-      // Subtitle cue blocks in bottom half (draggable!)
-      const cueTop = h * 0.56;
-      const cueH = h * 0.38;
+      // === T3 (y 26..52): Draggable Subtitle Blocks ===
+      const cueTop = 26;
+      const cueH = 26;
       for (let i = 0; i < this.segments.length; i++) {
         const seg = this.segments[i];
         const x1 = this._timeToX(seg.start, w);
         const x2 = Math.max(x1 + 4, this._timeToX(seg.end, w));
         const bw = x2 - x1;
         const isActive = i === this.activeIdx;
-        ctx.fillStyle = isActive ? 'rgba(16, 185, 129, 0.78)' : 'rgba(99, 102, 241, 0.55)';
+        ctx.fillStyle = isActive ? 'rgba(16, 185, 129, 0.82)' : 'rgba(99, 102, 241, 0.52)';
         ctx.fillRect(x1, cueTop, bw, cueH);
-        ctx.strokeStyle = isActive ? '#6ee7b7' : 'rgba(199, 210, 254, 0.5)';
+        ctx.strokeStyle = isActive ? '#6ee7b7' : 'rgba(199, 210, 254, 0.45)';
         ctx.lineWidth = 1;
         ctx.strokeRect(x1 + 0.5, cueTop + 0.5, Math.max(1, bw - 1), cueH - 1);
 
@@ -249,12 +287,68 @@
           ctx.clip();
           ctx.fillStyle = '#f8fafc';
           ctx.font = '10px sans-serif';
-          ctx.fillText(seg.text || `#${i + 1}`, x1 + 4, cueTop + cueH - 9);
+          ctx.fillText(seg.text || `#${i + 1}`, x1 + 4, cueTop + 17);
           ctx.restore();
         }
       }
 
-      // Razor Split Markers (amber dashed vertical cut lines)
+      // === T2 (y 56..98): Audio Waveform Peaks ===
+      const waveMid = 77;
+      const waveAmp = 18;
+      if (this.peaks.length > 0) {
+        const step = w / this.peaks.length;
+        ctx.fillStyle = 'rgba(129, 140, 248, 0.78)';
+        for (let i = 0; i < this.peaks.length; i++) {
+          const barH = Math.max(2, this.peaks[i] * waveAmp * 2);
+          ctx.fillRect(i * step, waveMid - barH / 2, Math.max(1, step - 0.6), barH);
+        }
+      } else {
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
+        ctx.beginPath();
+        ctx.moveTo(0, waveMid);
+        ctx.lineTo(w, waveMid);
+        ctx.stroke();
+      }
+
+      // === T1 (y 102..126): BGM Music Track + Auto Audio Ducking Visualizer ===
+      if (this.bgmInfo && this.bgmInfo.enabled && this.bgmInfo.name) {
+        ctx.fillStyle = 'rgba(20, 184, 166, 0.26)';
+        ctx.fillRect(2, 103, w - 4, 22);
+        ctx.strokeStyle = 'rgba(45, 212, 191, 0.55)';
+        ctx.strokeRect(2.5, 103.5, w - 5, 21);
+
+        // Draw auto-ducking dip curve under every subtitle cue!
+        if (this.bgmInfo.auto_ducking) {
+          ctx.fillStyle = 'rgba(13, 148, 136, 0.55)';
+          for (const seg of this.segments) {
+            const dx1 = this._timeToX(seg.start, w);
+            const dx2 = Math.max(dx1 + 3, this._timeToX(seg.end, w));
+            ctx.fillRect(dx1, 117, dx2 - dx1, 8);
+          }
+        }
+        ctx.fillStyle = '#99f6e4';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(
+          `🎵 ${this.bgmInfo.name}${this.bgmInfo.auto_ducking ? ' • Auto Ducking ON' : ''}`,
+          44,
+          117
+        );
+      } else {
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.35)';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('🎵 BGM Track (เพิ่มเพลงพื้นหลังในแท็บ 🎚️ สี/สปีด & BGM)', 44, 117);
+      }
+
+      // Track badge pills on far left
+      for (const tr of tracks) {
+        ctx.fillStyle = 'rgba(2, 6, 23, 0.78)';
+        ctx.fillRect(2, tr.y + 3, 36, 15);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '9px sans-serif';
+        ctx.fillText(tr.label, 5, tr.y + 13);
+      }
+
+      // Razor Split Markers (amber dashed vertical lines across all tracks)
       if (Array.isArray(this.splitMarkers) && this.splitMarkers.length > 0) {
         ctx.save();
         ctx.strokeStyle = '#fbbf24';
@@ -272,7 +366,7 @@
         ctx.restore();
       }
 
-      // Playhead
+      // Full-height Playhead
       const px = this._timeToX(this.currentTime, w);
       ctx.fillStyle = '#f43f5e';
       ctx.fillRect(px - 1, 0, 2, h);

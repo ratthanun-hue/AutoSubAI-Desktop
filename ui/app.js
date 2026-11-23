@@ -186,6 +186,7 @@
 
   let localWorkspace = null;
   let splitMerge = null;
+  let proEditor = null;
 
   // Instantiate Modular Native Subtitle Studio
   const studio = new window.DesktopSubtitleStudio({
@@ -201,6 +202,12 @@
     },
     onProjectChanged: () => {
       if (splitMerge) splitMerge.resetSplitMarkers();
+      if (proEditor) proEditor.resetForNewProject();
+    },
+    getProRenderConfig: () => (proEditor ? proEditor.getRenderConfig() : {}),
+    getProTimelineMeta: () => (proEditor ? proEditor.getTimelineMeta() : {}),
+    onTimeUpdateHook: (t, activeCueIdx) => {
+      if (proEditor) proEditor.onTimeUpdate(t, activeCueIdx);
     },
   });
 
@@ -231,6 +238,20 @@
     },
     studio,
     localWorkspace
+  );
+
+  // Instantiate Phase 2 & 3 Pro Video Editor (Color, Speed, BGM Ducking, B-Roll & Thumbnail Maker)
+  proEditor = new window.DesktopProEditor(
+    {
+      state,
+      getTauri,
+      invokeCmd,
+      toAssetUrl,
+      showToast,
+      getFileName,
+      pickLocalVideoForProject,
+    },
+    studio
   );
 
   // --- Built-in Auto-Updater ---
@@ -951,6 +972,7 @@
     localWorkspace.bindEvents();
     studio.bindEvents();
     if (splitMerge) splitMerge.bindEvents();
+    if (proEditor) proEditor.bindEvents();
   }
 
   window.addEventListener('DOMContentLoaded', async () => {

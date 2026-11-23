@@ -15,7 +15,7 @@
         <div>
           <div class="brand-title">
             AutoSubAI Desktop
-            <span class="badge-beta">v1.2.0 Pro Split+Merge</span>
+            <span class="badge-beta">v1.4.0 Pro NLE Studio</span>
           </div>
           <div class="brand-sub" data-i18n="brandSub">Local &amp; Cloud Drama Subtitling, Style Inspector &amp; Video Finishing</div>
         </div>
@@ -320,10 +320,18 @@
               <!-- Live WYSIWYG Video Stage -->
               <div id="studio-video-stage" class="video-stage ar-16-9">
                 <video id="studio-video" controls playsinline></video>
+                <audio id="studio-bgm-audio" loop preload="auto" style="display:none;"></audio>
                 <!-- Live Delogo / Cover Bar Preview -->
                 <div id="studio-delogo-preview" class="delogo-preview hidden" aria-hidden="true"></div>
+                <!-- Live Photo B-Roll / PiP Preview -->
+                <img id="studio-broll-preview" class="broll-preview hidden" alt="B-Roll" />
                 <!-- Live Watermark PNG Preview -->
                 <img id="studio-watermark-preview" class="watermark-preview hidden" alt="Watermark" />
+                <!-- Live Viral Thumbnail Headline Preview -->
+                <div id="studio-thumb-preview" class="thumb-preview-overlay hidden" aria-hidden="true">
+                  <div id="studio-thumb-hl" class="thumb-preview-hl"></div>
+                  <div id="studio-thumb-sl" class="thumb-preview-sl hidden"></div>
+                </div>
                 <!-- Live Safe Zone Overlay -->
                 <div id="studio-safezone-overlay" class="safezone-overlay hidden" aria-hidden="true"></div>
                 <!-- Live WYSIWYG Subtitle Overlay (Primary + Bilingual Secondary) -->
@@ -335,10 +343,10 @@
                 </div>
               </div>
 
-              <!-- Interactive Audio Waveform + Draggable Cue Timeline -->
+              <!-- CapCut-Style 4-Track Visual Timeline -->
               <div class="waveform-toolbar">
                 <div class="transport-group">
-                  <span class="muted">🌊 Waveform:</span>
+                  <span class="muted">🎞️ 4-Track Timeline:</span>
                   <button type="button" class="chip-btn active" data-wf-zoom="1">1x</button>
                   <button type="button" class="chip-btn" data-wf-zoom="2">2x</button>
                   <button type="button" class="chip-btn" data-wf-zoom="4">4x</button>
@@ -394,14 +402,16 @@
 
               <div class="shortcut-hint" data-i18n="shortcutTip">คีย์ลัด: Space เล่น/หยุด • J ถอย 3 วิ • L หน้า 3 วิ • Ctrl+Enter แยกบรรทัด • Ctrl+S บันทึก</div>
 
-              <!-- 6-TAB PRO INSPECTOR DRAWER -->
+              <!-- 8-TAB PRO NLE INSPECTOR DRAWER -->
               <div class="inspector-box">
-                <div class="inspector-tabs inspector-tabs-6" role="tablist">
+                <div class="inspector-tabs inspector-tabs-8" role="tablist">
                   <button type="button" class="insp-tab active" data-insp-tab="style" data-i18n="inspTabStyle">🎨 สไตล์ซับ</button>
                   <button type="button" class="insp-tab" data-insp-tab="delogo" data-i18n="inspTabDelogo">🔲 เบลอซับเดิม</button>
                   <button type="button" class="insp-tab" data-insp-tab="watermark" data-i18n="inspTabWatermark">🏷️ โลโก้ช่อง</button>
                   <button type="button" class="insp-tab" data-insp-tab="bilingual" data-i18n="inspTabBilingual">🌏 ซับ 2 ภาษา</button>
-                  <button type="button" class="insp-tab" data-insp-tab="cutshorts" data-i18n="inspTabCutShorts">✂️ ตัดคลิป &amp; 9:16</button>
+                  <button type="button" class="insp-tab" data-insp-tab="cutshorts" data-i18n="inspTabCutShorts">✂️ แยก/รวม &amp; 9:16</button>
+                  <button type="button" class="insp-tab" data-insp-tab="colorbgm" data-i18n="inspTabColorBgm">🎚️ สี/สปีด &amp; BGM</button>
+                  <button type="button" class="insp-tab" data-insp-tab="brollthumb" data-i18n="inspTabBrollThumb">🖼️ B-Roll &amp; ปกคลิป</button>
                   <button type="button" class="insp-tab" data-insp-tab="glossary" data-i18n="inspTabGlossary">📖 คลังตัวละคร</button>
                 </div>
 
@@ -711,7 +721,144 @@
                   </div>
                 </div>
 
-                <!-- Sub-Tab 6: SERIES GLOSSARY (CHARACTER DICTIONARY) -->
+                <!-- Sub-Tab 6: COLOR GRADING, SPEED & BGM AUTO-DUCKING (Phase 2) -->
+                <div id="insp-pane-colorbgm" class="insp-pane hidden">
+                  <div class="preset-row" style="margin-bottom:8px;">
+                    <span class="muted">พรีเซ็ตสี:</span>
+                    <button type="button" class="chip-btn" data-color-preset="reset">🔄 ปกติ</button>
+                    <button type="button" class="chip-btn" data-color-preset="cinema">🎬 Cinema</button>
+                    <button type="button" class="chip-btn" data-color-preset="vivid">✨ Vivid HD</button>
+                    <button type="button" class="chip-btn" data-color-preset="warm">🌅 Warm Drama</button>
+                  </div>
+                  <div class="insp-grid">
+                    <div class="insp-field">
+                      <label>ความสว่าง (Brightness)</label>
+                      <div class="color-row">
+                        <input id="pro-brightness" type="range" min="-35" max="35" value="0" />
+                        <span id="pro-brightness-val" class="mono-tag">+0%</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label>คอนทราสต์ (Contrast)</label>
+                      <div class="color-row">
+                        <input id="pro-contrast" type="range" min="60" max="150" value="100" />
+                        <span id="pro-contrast-val" class="mono-tag">100%</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label>ความสดสี (Saturation)</label>
+                      <div class="color-row">
+                        <input id="pro-saturation" type="range" min="0" max="180" value="100" />
+                        <span id="pro-saturation-val" class="mono-tag">100%</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label>⚡ ความเร็วคลิปส่งออก (ซับขยับตามอัตโนมัติ)</label>
+                      <select id="pro-export-speed">
+                        <option value="0.5">0.5x (Slow Motion)</option>
+                        <option value="0.75">0.75x</option>
+                        <option value="1" selected>1.0x (ปกติ)</option>
+                        <option value="1.25">1.25x (กระชับ)</option>
+                        <option value="1.5">1.5x (สรุปเร็ว)</option>
+                        <option value="2">2.0x (Fast)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="pro-split-box" style="margin-top:9px;">
+                    <div class="pro-split-head">
+                      <label class="toggle-check">
+                        <input id="pro-bgm-enabled" type="checkbox" />
+                        <strong>🎵 เพลงพื้นหลัง (BGM Track) + Auto Audio Ducking</strong>
+                      </label>
+                      <span id="pro-bgm-label" class="muted">ยังไม่ได้เลือกเพลง BGM</span>
+                    </div>
+                    <div class="pro-split-row">
+                      <button id="pro-bgm-pick-btn" type="button" class="btn btn-secondary btn-xs">🎵 เลือกไฟล์เพลง (MP3/WAV)</button>
+                      <button id="pro-bgm-clear-btn" type="button" class="btn btn-ghost btn-xs">✕ ล้าง</button>
+                      <label class="toggle-check" style="font-size:11px;">
+                        <input id="pro-bgm-ducking" type="checkbox" checked />
+                        <span>🤖 Auto Audio Ducking (เบาเสียงเพลงอัตโนมัติตอนคนพูด)</span>
+                      </label>
+                    </div>
+                    <div class="insp-grid">
+                      <div class="insp-field">
+                        <label>🎙️ ระดับเสียงพูดต้นฉบับ</label>
+                        <div class="color-row">
+                          <input id="pro-dlg-vol" type="range" min="0" max="180" value="100" />
+                          <span id="pro-dlg-vol-val" class="mono-tag">100%</span>
+                        </div>
+                      </div>
+                      <div class="insp-field">
+                        <label>🎶 ระดับเสียงเพลง BGM</label>
+                        <div class="color-row">
+                          <input id="pro-bgm-vol" type="range" min="5" max="100" value="30" />
+                          <span id="pro-bgm-vol-val" class="mono-tag">30%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Sub-Tab 7: PHOTO B-ROLL / PiP & VIRAL THUMBNAIL MAKER (Phase 3) -->
+                <div id="insp-pane-brollthumb" class="insp-pane hidden">
+                  <div class="pro-split-box">
+                    <div class="pro-split-head">
+                      <strong>🖼️ แทรกรูปภาพประกอบ (Photo B-Roll / Picture-in-Picture)</strong>
+                      <button id="btn-add-broll" type="button" class="btn btn-primary btn-xs">➕ แทรกรูปที่ Playhead</button>
+                    </div>
+                    <div class="pro-split-row">
+                      <span class="muted" style="font-size:11px;">แสดงนาน(วิ):</span>
+                      <input id="broll-dur-input" type="number" min="1" max="120" value="5" style="width:48px;" />
+                      <select id="broll-pos-select" class="mini-select">
+                        <option value="top-right" selected>มุมขวาบน</option>
+                        <option value="top-left">มุมซ้ายบน</option>
+                        <option value="center">กลางจอ</option>
+                        <option value="full">เต็มจอ (B-Roll Cutaway)</option>
+                      </select>
+                      <span class="muted" style="font-size:11px;">ขนาด(%):</span>
+                      <input id="broll-width-input" type="number" min="15" max="100" value="36" style="width:48px;" />
+                      <input id="broll-opacity-input" type="number" min="0.2" max="1" step="0.1" value="1" style="width:46px;" title="Opacity" />
+                    </div>
+                    <div id="pro-broll-list" class="pro-broll-list"></div>
+                  </div>
+
+                  <div class="pro-split-box" style="margin-top:8px;">
+                    <div class="pro-split-head">
+                      <strong>📸 1-Click Viral Thumbnail Maker (สร้างปก YouTube / TikTok จากเฟรมปัจจุบัน)</strong>
+                      <button id="btn-toggle-thumb-preview" type="button" class="btn btn-ghost btn-xs">👁️ พรีวิวบนจอ</button>
+                    </div>
+                    <div class="insp-grid">
+                      <div class="insp-field">
+                        <label>พาดหัวหลัก (Headline)</label>
+                        <input id="thumb-headline-input" type="text" placeholder="เช่น ความลับที่ไม่มีใครรู้!" />
+                      </div>
+                      <div class="insp-field">
+                        <label>คำโปรยรอง (Subline)</label>
+                        <input id="thumb-subline-input" type="text" placeholder="เช่น EP.12 ไฮไลต์เด็ดห้ามพลาด" />
+                      </div>
+                    </div>
+                    <div class="pro-split-row">
+                      <select id="thumb-font-select" class="mini-select">
+                        <option value="Prompt" selected>Prompt Bold</option>
+                        <option value="Kanit">Kanit Bold</option>
+                        <option value="Sarabun">Sarabun Bold</option>
+                      </select>
+                      <input id="thumb-color-input" type="color" value="#fde047" title="สีพาดหัว" />
+                      <select id="thumb-aspect-select" class="mini-select">
+                        <option value="16:9" selected>16:9 YouTube (1920×1080)</option>
+                        <option value="9:16">9:16 TikTok/Reels (1080×1920)</option>
+                      </select>
+                      <select id="thumb-format-select" class="mini-select">
+                        <option value="jpg" selected>.JPG</option>
+                        <option value="png">.PNG</option>
+                      </select>
+                      <button id="btn-export-thumbnail" type="button" class="btn btn-accent btn-xs" style="margin-left:auto;" data-i18n="btnExportThumb">📸 ส่งออกภาพปก</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Sub-Tab 8: SERIES GLOSSARY (CHARACTER DICTIONARY) -->
                 <div id="insp-pane-glossary" class="insp-pane hidden">
                   <div class="glossary-top-row">
                     <select id="glossary-series-select" style="flex:1;"></select>
@@ -938,6 +1085,7 @@
   <script src="js/local_projects.js"></script>
   <script src="js/studio.js"></script>
   <script src="js/split_merge.js"></script>
+  <script src="js/pro_editor.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
