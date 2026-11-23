@@ -1,0 +1,139 @@
+name: Build AutoSubAI Native Desktop App (Tauri v2)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-tauri:
+    name: Build ${{ matrix.platform_label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform_label: Windows x64 (.exe & .msi — All-in-One)
+            os: windows-latest
+            rust_target: ""
+            tauri_args: ""
+            ffmpeg_url: "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-win32-x64.gz"
+            ffmpeg_dest: "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"
+            verify_exec: true
+            artifact_name: AutoSubAI-Windows-x64-AllInOne
+          - platform_label: macOS Apple Silicon M1-M4 (aarch64 .dmg — All-in-One)
+            os: macos-latest
+            rust_target: "aarch64-apple-darwin"
+            tauri_args: "--target aarch64-apple-darwin"
+            ffmpeg_url: "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-arm64.gz"
+            ffmpeg_dest: "src-tauri/binaries/ffmpeg-aarch64-apple-darwin"
+            verify_exec: true
+            artifact_name: AutoSubAI-macOS-AppleSilicon-AllInOne
+          - platform_label: macOS Intel (x64 .dmg — All-in-One)
+            os: macos-latest
+            rust_target: "x86_64-apple-darwin"
+            tauri_args: "--target x86_64-apple-darwin"
+            ffmpeg_url: "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-x64.gz"
+            ffmpeg_dest: "src-tauri/binaries/ffmpeg-x86_64-apple-darwin"
+            verify_exec: false
+            artifact_name: AutoSubAI-macOS-Intel-AllInOne
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Download & verify bundled static FFmpeg sidecar (b6.1.1)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src-tauri/binaries
+          curl -fSL --retry 3 "${{ matrix.ffmpeg_url }}" -o /tmp/ffmpeg.gz
+          gunzip -c /tmp/ffmpeg.gz > "${{ matrix.ffmpeg_dest }}"
+          rm -f /tmp/ffmpeg.gz
+          chmod +x "${{ matrix.ffmpeg_dest }}"
+          ls -lh "${{ matrix.ffmpeg_dest }}"
+          file "${{ matrix.ffmpeg_dest }}" || true
+          if [ "${{ matrix.verify_exec }}" = "true" ]; then
+            "${{ matrix.ffmpeg_dest }}" -version | head -n 3
+          fi
+
+      - name: Install Tauri CLI
+        run: npm install
+
+      - name: Generate native platform icons (.ico / .icns / PNGs)
+        run: npx tauri icon icon-source.png
+
+      - name: Build Tauri v2 All-in-One Desktop Installer
+        run: npx tauri build ${{ matrix.tauri_args }}
+
+      - name: Collect installers into release_files/
+        shell: bash
+        run: |
+          mkdir -p release_files
+          find src-tauri/target -type f -path "*/bundle/*" \( -name "*.exe" -o -name "*.msi" -o -name "*.dmg" \) \
+            ! -path "*/debug/*" \
+            -exec cp -v {} release_files/ \;
+          ls -lh release_files/
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release_files/*
+          retention-days: 30
+
+  publish-beta-release:
+    name: Publish All-in-One Studio Release Downloads
+    needs: build-tauri
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets
+          merge-multiple: true
+
+      - name: List collected installers
+        run: ls -lh release_assets/
+
+      - name: Create or update desktop-v1.1.1-beta Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v1.1.1-beta
+          name: "AutoSubAI Desktop Studio v1.1.1 Beta — Dedicated AutoSubAI-Desktop Repository & Smart Auto-Updater"
+          prerelease: true
+          make_latest: true
+          body: |
+            ## AutoSubAI Native Desktop Studio (Tauri v2 — v1.1.1 Beta)
+
+            ### Downloads (All-in-One with Built-in FFmpeg & Thai Fonts)
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.1.1_x64-setup.exe` (or `AutoSubAI_1.1.1_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.1.1_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.1.1_x64.dmg`
+
+            ### Highlights
+            - 💻 **Local Workspace Project (100% Local & Free)**: Edit local videos and `.SRT`/`.VTT` subtitles offline with zero login, built-in FFmpeg 16:9 thumbnails, Style Inspector, Karaoke, Delogo Blur, Watermark, Intro/Outro, Audio Waveform, Trim/Multi-Cut + Ripple Sync, 9:16 Viral Shorts, and Hardsub/Softsub MP4 export
+            - ☁️ **Cloud Workspace Project + Smart Cloud AI**: Sync with [thaiautosub.com](https://www.thaiautosub.com), one-click Google ID sign-in, PromptPay Top-Up redirect, and ฿10 free-trial credit (up to Plan 2 LipSync Pro™)
+            - ⬆️ **Dedicated Auto-Updater**: Now powered directly by `ratthanun-hue/AutoSubAI-Desktop` Releases for seamless 1-click updates
+          files: release_assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,30 @@
+AutoSubAI Desktop Studio — Third-Party Software Licenses & Attributions
+=======================================================================
+
+1. FFmpeg (Bundled Media Engine Sidecar)
+----------------------------------------
+AutoSubAI Desktop invokes FFmpeg as an external standalone command-line
+process (sidecar binary) for local audio extraction, media duration/resolution
+probing, delogo blur bar, channel watermark overlay, and WYSIWYG subtitle
+rendering.
+
+FFmpeg is licensed under the GNU General Public License (GPL) version 3
+(or LGPL 2.1+ depending on build configuration).
+- Official FFmpeg Project & Source Code: https://ffmpeg.org/
+- Static Binary Build Source (b6.1.1):
+  https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1
+- Full GPLv3 License Text: https://www.gnu.org/licenses/gpl-3.0.txt
+
+2. Thai Subtitle Fonts (Prompt, Kanit, Sarabun)
+-----------------------------------------------
+Bundled for broadcast-grade Thai & Latin subtitle rendering in Style Inspector
+and local Hardsub MP4 export.
+- Fonts: Prompt, Kanit, Sarabun (Google Fonts / Cadson Demak)
+- License: SIL Open Font License (OFL) Version 1.1
+- Source: https://github.com/google/fonts
+- License Text: https://openfontlicense.org/
+
+3. Tauri v2 Framework
+---------------------
+- Project: https://tauri.app/
+- License: MIT / Apache-2.0

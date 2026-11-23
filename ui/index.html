@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoSubAI Desktop Studio — Drama Subtitling &amp; Style Inspector</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true">AS</div>
+        <div>
+          <div class="brand-title">
+            AutoSubAI Desktop
+            <span class="badge-beta">v1.1.1 Local+Cloud</span>
+          </div>
+          <div class="brand-sub" data-i18n="brandSub">Local &amp; Cloud Drama Subtitling, Style Inspector &amp; Video Finishing</div>
+        </div>
+      </div>
+
+      <!-- Primary 4-Tab Navigation -->
+      <nav class="main-tabs" role="tablist">
+        <button id="tab-btn-local" class="main-tab active" data-tab="local" role="tab" data-i18n="tabLocal">💻 Local Workspace</button>
+        <button id="tab-btn-projects" class="main-tab" data-tab="projects" role="tab" data-i18n="tabProjects">☁️ Cloud Workspace</button>
+        <button id="tab-btn-batch" class="main-tab" data-tab="batch" role="tab" data-i18n="tabBatch">⚡ Batch &amp; Cloud AI</button>
+        <button id="tab-btn-studio" class="main-tab" data-tab="studio" role="tab" data-i18n="tabStudio">🎬 Subtitle Studio</button>
+      </nav>
+
+      <div class="topbar-actions">
+        <!-- Bilingual App UI Language Switcher (TH / EN) -->
+        <div class="lang-switch" role="group" aria-label="App Language">
+          <button id="ui-lang-th" type="button" class="lang-btn active" title="ภาษาไทย">TH</button>
+          <button id="ui-lang-en" type="button" class="lang-btn" title="English">EN</button>
+        </div>
+
+        <button id="update-pill" class="btn btn-accent btn-xs hidden" title="Click to download & install new version">
+          ⬆️ <span id="update-pill-text">Update</span>
+        </button>
+
+        <div id="ffmpeg-pill" class="pill pill-muted" title="FFmpeg Status">
+          <span class="dot"></span>
+          <span id="ffmpeg-pill-text">FFmpeg...</span>
+        </div>
+
+        <button id="credit-pill" class="pill pill-credit hidden" title="Refresh Credit">
+          <span>💳</span>
+          <span id="credit-balance-text">฿0.00</span>
+        </button>
+
+        <button id="account-btn" class="btn btn-ghost btn-sm">
+          <span id="account-btn-label" data-i18n="btnLogin">🔐 เข้าสู่ระบบ</span>
+        </button>
+
+        <button id="open-cloud-btn" class="btn btn-secondary btn-sm" data-i18n="btnCloudWeb">🌐 เปิดเว็บ</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <!-- Auth Panel (Collapsed by default so Local Workspace works immediately without login!) -->
+      <section id="auth-panel" class="card auth-card hidden">
+        <div class="card-header">
+          <div>
+            <h2 data-i18n="authTitle">เชื่อมต่อบัญชี AutoSubAI</h2>
+            <p class="muted" data-i18n="authSubtitle">ล็อกอินด้วย Google ID (ผ่านเบราว์เซอร์), อีเมล/รหัสผ่าน หรือ API Key เพื่อซิงค์โปรเจกต์และเครดิต</p>
+          </div>
+          <button id="auth-close-btn" class="btn-icon hidden">✕</button>
+        </div>
+
+        <div class="google-auth-bar">
+          <button id="google-login-btn" type="button" class="btn btn-google">
+            <span class="g-badge">G</span>
+            <span id="google-login-label" data-i18n="btnGoogle">เข้าสู่ระบบด้วย Google ID (เปิดผ่านเบราว์เซอร์อัตโนมัติ)</span>
+          </button>
+          <span class="muted" data-i18n="orBelow">หรือเลือกวิธีอื่นด้านล่าง</span>
+        </div>
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-auth-tab="login" data-i18n="authTabEmail">เข้าสู่ระบบด้วยอีเมล</button>
+          <button class="auth-tab" data-auth-tab="apikey" data-i18n="authTabKey">เชื่อมต่อด้วย API Key</button>
+        </div>
+
+        <form id="login-form" class="auth-form">
+          <div class="form-row">
+            <div class="field">
+              <label for="login-email" data-i18n="lblEmail">อีเมล</label>
+              <input id="login-email" type="email" placeholder="you@example.com" autocomplete="username" required />
+            </div>
+            <div class="field">
+              <label for="login-password" data-i18n="lblPassword">รหัสผ่าน</label>
+              <input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+            </div>
+            <div class="field field-action">
+              <button id="login-submit-btn" type="submit" class="btn btn-primary" data-i18n="btnSignIn">เข้าสู่ระบบ</button>
+            </div>
+          </div>
+        </form>
+
+        <form id="apikey-form" class="auth-form hidden">
+          <div class="form-row">
+            <div class="field field-wide">
+              <label for="apikey-input">AutoSubAI API Key (sk_live_...)</label>
+              <input id="apikey-input" type="password" placeholder="sk_live_xxxxxxxxxxxxxxxx" autocomplete="off" required />
+            </div>
+            <div class="field field-action">
+              <button id="apikey-submit-btn" type="submit" class="btn btn-primary" data-i18n="btnVerifyKey">ยืนยันคีย์</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="auth-footer">
+          <div class="server-row">
+            <label for="api-base-input">Server Endpoint:</label>
+            <input id="api-base-input" type="url" value="https://www.thaiautosub.com" />
+          </div>
+          <div id="auth-user-bar" class="auth-user-bar hidden">
+            <span id="auth-user-info" class="muted"></span>
+            <button id="logout-btn" type="button" class="btn btn-danger-ghost btn-sm" data-i18n="btnLogout">ออกจากระบบ</button>
+          </div>
+        </div>
+        <div id="auth-error" class="inline-alert hidden"></div>
+      </section>
+
+      <!-- ============================================================
+           TAB 0 (DEFAULT): LOCAL WORKSPACE PROJECT (100% LOCAL FREE)
+           ============================================================ -->
+      <div id="view-local" class="tab-view">
+        <section class="card">
+          <div class="projects-header">
+            <div>
+              <h2 data-i18n="localTitle">💻 Local Workspace Project (ทำงานบนเครื่อง 100% — ใช้ฟรีเหมือน CapCut)</h2>
+              <p class="muted" data-i18n="localSub">เพิ่มวิดีโอและไฟล์ซับ (.SRT/.VTT) บนเครื่องได้ทันทีโดยไม่ต้องล็อกอิน — หรือกดสร้างซับด้วย Cloud AutoSubAI (สมัครใหม่รับเครดิตฟรี ฿10 สูงสุด Plan 2)</p>
+            </div>
+            <div class="projects-controls">
+              <input id="local-search-input" type="text" data-i18n-ph="localSearchPh" placeholder="🔍 ค้นหา Local Project..." />
+              <button id="local-add-media-btn" type="button" class="btn btn-primary btn-sm" data-i18n="btnAddLocalMedia">➕ เพิ่มไฟล์วิดีโอ/เสียง (Local)</button>
+            </div>
+          </div>
+
+          <div id="local-projects-grid" class="projects-grid"></div>
+        </section>
+      </div>
+
+      <!-- ============================================================
+           TAB 1: BATCH & LOCAL PIPELINE
+           ============================================================ -->
+      <div id="view-batch" class="tab-view hidden">
+        <section class="card config-card">
+          <div class="plan-grid" id="plan-grid" role="radiogroup">
+            <button type="button" class="plan-card" data-plan="plan-1">
+              <div class="plan-top">
+                <span class="plan-name">Plan 1 • CleanVoice™</span>
+                <span class="plan-price">฿0.05/min</span>
+              </div>
+              <p class="plan-desc">AutoSub Neural Vocal Isolation™ + Standard ASR</p>
+            </button>
+
+            <button type="button" class="plan-card active" data-plan="plan-2">
+              <div class="plan-top">
+                <span class="plan-name">Plan 2 • LipSync Pro™</span>
+                <span class="plan-price">฿0.10/min</span>
+              </div>
+              <p class="plan-desc">AutoSub Micro-Alignment™ (20ms) + 3,248 Thai Drama Lexicon</p>
+            </button>
+
+            <button type="button" class="plan-card" data-plan="plan-3">
+              <div class="plan-top">
+                <span class="plan-name">Plan 3 • Studio Masterpiece™</span>
+                <span class="plan-price">฿0.195/min</span>
+              </div>
+              <p class="plan-desc">Full Pipeline + AutoSub Contextual Mastermind™ Deep QC</p>
+            </button>
+          </div>
+
+          <div class="options-bar">
+            <div class="option-group">
+              <label for="lang-select" data-i18n="lblSourceLang">ภาษาต้นฉบับ</label>
+              <select id="lang-select">
+                <option value="th" selected>🇹🇭 ภาษาไทย (Thai)</option>
+                <option value="auto">🌐 Auto Detect</option>
+                <option value="en">🇺🇸 English</option>
+                <option value="zh">🇨🇳 中文 (Chinese)</option>
+                <option value="ja">🇯🇵 日本語 (Japanese)</option>
+                <option value="ko">🇰🇷 한국어 (Korean)</option>
+              </select>
+            </div>
+
+            <label class="toggle-check">
+              <input id="opt-extract-local" type="checkbox" checked />
+              <span data-i18n="optExtractLocal">⚡ แยกเสียงบนเครื่องก่อนอัปโหลด (ลดขนาด 95%)</span>
+            </label>
+
+            <label class="toggle-check">
+              <input id="opt-autosave-srt" type="checkbox" checked />
+              <span data-i18n="optSaveSrt">💾 บันทึก .srt ข้างไฟล์ต้นฉบับ</span>
+            </label>
+
+            <label class="toggle-check">
+              <input id="opt-autosave-vtt" type="checkbox" />
+              <span data-i18n="optSaveVtt">📄 บันทึก .vtt ด้วย</span>
+            </label>
+
+            <label class="toggle-check" title="Apply active Series Glossary + Style Inspector + Delogo Blur + Watermark + Intro/Outro to render finished MP4 for every episode automatically!">
+              <input id="opt-batch-factory" type="checkbox" />
+              <span data-i18n="optBatchFactory">🏭 Batch Drama Factory: เรนเดอร์ MP4 อัตโนมัติหลังถอดเสียง (Style+เบลอซับ+โลโก้+Intro/Outro+คลังตัวละคร)</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="card queue-card">
+          <div id="drop-zone" class="drop-zone">
+            <div class="drop-icon">🎬</div>
+            <div class="drop-copy">
+              <h3 data-i18n="dropTitle">ลากไฟล์วิดีโอหรือไฟล์เสียงมาวางที่นี่ (รองรับหลายไฟล์พร้อมกัน)</h3>
+              <p class="muted" data-i18n="dropSub">รองรับ MP4, MKV, MOV, AVI, WEBM, TS, MP3, WAV, M4A, FLAC</p>
+            </div>
+            <button id="pick-files-btn" type="button" class="btn btn-primary" data-i18n="btnPickFiles">➕ เลือกไฟล์วิดีโอ/เสียง</button>
+          </div>
+
+          <div class="queue-toolbar">
+            <div class="queue-stats" id="queue-stats">0 files</div>
+            <div class="queue-buttons">
+              <button id="clear-done-btn" type="button" class="btn btn-ghost btn-sm" disabled data-i18n="btnClearDone">🧹 ล้างรายการที่เสร็จ</button>
+              <button id="stop-queue-btn" type="button" class="btn btn-danger-ghost btn-sm hidden" data-i18n="btnStopQueue">⏹ หยุดหลังไฟล์ปัจจุบัน</button>
+              <button id="start-queue-btn" type="button" class="btn btn-accent" disabled data-i18n="btnStartQueue">▶ เริ่มถอดเสียงทั้งหมด</button>
+            </div>
+          </div>
+
+          <div class="queue-list" id="queue-list"></div>
+        </section>
+      </div>
+
+      <!-- ============================================================
+           TAB 2: WORKSPACE PROJECTS
+           ============================================================ -->
+      <div id="view-projects" class="tab-view hidden">
+        <section class="card">
+          <div class="projects-header">
+            <div>
+              <h2 data-i18n="projTitle">📁 Workspace Projects</h2>
+              <p class="muted" data-i18n="projSub">ซิงค์โปรเจกต์ทั้งหมดจากบัญชี thaiautosub.com</p>
+            </div>
+            <div class="projects-controls">
+              <input id="projects-search-input" type="text" data-i18n-ph="projSearchPh" placeholder="🔍 ค้นหาชื่อโปรเจกต์..." />
+              <button id="projects-refresh-btn" type="button" class="btn btn-secondary btn-sm" data-i18n="btnRefresh">🔄 รีเฟรช</button>
+            </div>
+          </div>
+
+          <div id="projects-storage-bar" class="storage-bar hidden">
+            <div class="storage-bar-top">
+              <span id="storage-bar-label">Storage: 0 MB / 1 GB</span>
+              <span id="storage-bar-pct" class="muted">0%</span>
+            </div>
+            <div class="progress-track">
+              <div id="storage-bar-fill" class="progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <div id="projects-grid" class="projects-grid"></div>
+        </section>
+      </div>
+
+      <!-- ============================================================
+           TAB 3: FULL NATIVE SUBTITLE STUDIO + STYLE INSPECTOR
+           ============================================================ -->
+      <div id="view-studio" class="tab-view hidden">
+        <div id="studio-empty" class="card empty-state">
+          <h3 data-i18n="studioEmptyTitle">🎬 ยังไม่ได้เลือกโปรเจกต์สำหรับ Subtitle Studio</h3>
+          <p class="muted" style="margin: 6px 0 14px;" data-i18n="studioEmptySub">ไปที่แท็บโปรเจกต์ทั้งหมด หรือกดปุ่ม Studio จากงานที่ถอดเสียงเสร็จแล้ว</p>
+          <button id="studio-go-projects-btn" type="button" class="btn btn-primary" data-i18n="btnGoProjects">📁 ไปหน้าโปรเจกต์ทั้งหมด</button>
+        </div>
+
+        <div id="studio-workspace" class="studio-workspace hidden">
+          <!-- Auto-Draft Recovery Banner -->
+          <div id="studio-draft-banner" class="draft-banner hidden">
+            <span id="studio-draft-msg" data-i18n="draftBannerText">พบข้อมูลร่างที่ยังไม่ได้บันทึกในเครื่องนี้</span>
+            <div class="draft-actions">
+              <button id="studio-restore-draft-btn" type="button" class="btn btn-accent btn-xs" data-i18n="btnRestoreDraft">🔄 กู้คืนร่าง</button>
+              <button id="studio-discard-draft-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnDiscardDraft">✕ ละทิ้ง</button>
+            </div>
+          </div>
+
+          <!-- Studio Header Bar -->
+          <div class="card studio-header-bar">
+            <div class="studio-title-block">
+              <button id="studio-back-btn" type="button" class="btn btn-ghost btn-sm" data-i18n="btnBack">← กลับ</button>
+              <div>
+                <div id="studio-project-title" class="studio-project-title">Project</div>
+                <div id="studio-project-meta" class="muted">0 cues</div>
+              </div>
+            </div>
+
+            <div class="studio-top-actions">
+              <button id="studio-import-sub-btn" type="button" class="btn btn-ghost btn-sm" title="Import local .SRT / .VTT into this project">📄 +SRT/VTT</button>
+              <button id="studio-audit-btn" type="button" class="btn btn-ghost btn-sm" data-i18n="btnQualityAudit">🛡️ ตรวจคุณภาพ</button>
+              <button id="studio-summary-btn" type="button" class="btn btn-ghost btn-sm" data-i18n="btnAiSummary">🧠 สรุป AI</button>
+              <button id="studio-save-btn" type="button" class="btn btn-accent btn-sm" data-i18n="btnSaveSync">💾 บันทึก (Cloud+เครื่อง)</button>
+              <div class="sub-export-pills">
+                <button id="studio-export-srt-btn" type="button" class="btn btn-ghost btn-xs">.SRT</button>
+                <button id="studio-export-vtt-btn" type="button" class="btn btn-ghost btn-xs">.VTT</button>
+                <button id="studio-export-ass-btn" type="button" class="btn btn-ghost btn-xs" title="Export styled Advanced SubStation Alpha">.ASS</button>
+                <button id="studio-export-txt-btn" type="button" class="btn btn-ghost btn-xs">.TXT</button>
+              </div>
+              <button id="studio-open-export-btn" type="button" class="btn btn-primary btn-sm" data-i18n="btnExportVideo">🎬 ส่งออก MP4</button>
+            </div>
+          </div>
+
+          <!-- Studio 2-Column Workspace -->
+          <div class="studio-split">
+            <!-- LEFT PANE: Video Preview + Transport + Visual Timeline + 4-Tab Pro Inspector -->
+            <section class="card studio-player-panel">
+              <div class="studio-source-bar">
+                <span id="studio-source-badge" class="pill pill-muted">Loading...</span>
+                <button id="studio-link-local-btn" type="button" class="btn btn-secondary btn-xs" data-i18n="btnLinkLocal">📎 ผูกไฟล์วิดีโอในเครื่อง</button>
+              </div>
+
+              <!-- Live WYSIWYG Video Stage -->
+              <div id="studio-video-stage" class="video-stage ar-16-9">
+                <video id="studio-video" controls playsinline></video>
+                <!-- Live Delogo / Cover Bar Preview -->
+                <div id="studio-delogo-preview" class="delogo-preview hidden" aria-hidden="true"></div>
+                <!-- Live Watermark PNG Preview -->
+                <img id="studio-watermark-preview" class="watermark-preview hidden" alt="Watermark" />
+                <!-- Live Safe Zone Overlay -->
+                <div id="studio-safezone-overlay" class="safezone-overlay hidden" aria-hidden="true"></div>
+                <!-- Live WYSIWYG Subtitle Overlay (Primary + Bilingual Secondary) -->
+                <div id="studio-sub-anchor" class="sub-anchor hidden">
+                  <div id="studio-sub-overlay" class="sub-overlay">
+                    <div id="studio-sub-primary" class="sub-primary-line"></div>
+                    <div id="studio-sub-secondary" class="sub-secondary-line hidden"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Interactive Audio Waveform + Draggable Cue Timeline -->
+              <div class="waveform-toolbar">
+                <div class="transport-group">
+                  <span class="muted">🌊 Waveform:</span>
+                  <button type="button" class="chip-btn active" data-wf-zoom="1">1x</button>
+                  <button type="button" class="chip-btn" data-wf-zoom="2">2x</button>
+                  <button type="button" class="chip-btn" data-wf-zoom="4">4x</button>
+                  <button type="button" class="chip-btn" data-wf-zoom="8">8x</button>
+                </div>
+                <div class="transport-group">
+                  <button id="wf-set-in-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnSetIn">📍 จุดเริ่ม [I]</button>
+                  <button id="wf-set-out-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnSetOut">📍 จุดจบ [O]</button>
+                  <button id="wf-cut-zone-btn" type="button" class="btn btn-danger-ghost btn-xs" data-i18n="btnAddCutZone">✂️ ตัดช่วงนี้ออก</button>
+                  <button id="wf-clear-cuts-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnClearCuts">🧹 ล้างจุดตัด</button>
+                </div>
+              </div>
+              <div id="studio-waveform-wrap" class="waveform-wrap" title="คลิกเพื่อกรอ • ลากขอบบล็อกซับด้านล่างเพื่อจูนเวลา / Click to seek • Drag cue edges to re-time">
+                <canvas id="studio-waveform-canvas"></canvas>
+              </div>
+
+              <!-- Transport & Aspect / Safe Zone Controls -->
+              <div class="transport-bar">
+                <div class="transport-group">
+                  <button id="studio-skip-back-btn" type="button" class="btn btn-ghost btn-xs" title="J (-3s)">⏪ -3s</button>
+                  <button id="studio-play-toggle-btn" type="button" class="btn btn-secondary btn-xs" title="Space">⏯ Play</button>
+                  <button id="studio-skip-fwd-btn" type="button" class="btn btn-ghost btn-xs" title="L (+3s)">+3s ⏩</button>
+                  <button id="studio-loop-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnLoop">🔁 วนซ้ำท่อนนี้</button>
+                </div>
+
+                <div class="transport-group">
+                  <label class="muted" for="studio-speed-select" data-i18n="lblSpeed">ความเร็ว:</label>
+                  <select id="studio-speed-select" class="mini-select">
+                    <option value="0.5">0.5x</option>
+                    <option value="0.75">0.75x</option>
+                    <option value="1" selected>1.0x</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="2">2.0x</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="transport-bar">
+                <div class="transport-group">
+                  <span class="muted" data-i18n="lblAspect">สัดส่วน:</span>
+                  <button type="button" class="chip-btn active" data-ar="16:9">16:9</button>
+                  <button type="button" class="chip-btn" data-ar="9:16">9:16</button>
+                  <button type="button" class="chip-btn" data-ar="1:1">1:1</button>
+                </div>
+                <div class="transport-group">
+                  <span class="muted" data-i18n="lblSafeZone">Safe Zone:</span>
+                  <button type="button" class="chip-btn active" data-sz="off">Off</button>
+                  <button type="button" class="chip-btn" data-sz="9:16">9:16</button>
+                  <button type="button" class="chip-btn" data-sz="16:9">16:9</button>
+                </div>
+              </div>
+
+              <div class="shortcut-hint" data-i18n="shortcutTip">คีย์ลัด: Space เล่น/หยุด • J ถอย 3 วิ • L หน้า 3 วิ • Ctrl+Enter แยกบรรทัด • Ctrl+S บันทึก</div>
+
+              <!-- 6-TAB PRO INSPECTOR DRAWER -->
+              <div class="inspector-box">
+                <div class="inspector-tabs inspector-tabs-6" role="tablist">
+                  <button type="button" class="insp-tab active" data-insp-tab="style" data-i18n="inspTabStyle">🎨 สไตล์ซับ</button>
+                  <button type="button" class="insp-tab" data-insp-tab="delogo" data-i18n="inspTabDelogo">🔲 เบลอซับเดิม</button>
+                  <button type="button" class="insp-tab" data-insp-tab="watermark" data-i18n="inspTabWatermark">🏷️ โลโก้ช่อง</button>
+                  <button type="button" class="insp-tab" data-insp-tab="bilingual" data-i18n="inspTabBilingual">🌏 ซับ 2 ภาษา</button>
+                  <button type="button" class="insp-tab" data-insp-tab="cutshorts" data-i18n="inspTabCutShorts">✂️ ตัดคลิป &amp; 9:16</button>
+                  <button type="button" class="insp-tab" data-insp-tab="glossary" data-i18n="inspTabGlossary">📖 คลังตัวละคร</button>
+                </div>
+
+                <!-- Sub-Tab 1: STYLE INSPECTOR -->
+                <div id="insp-pane-style" class="insp-pane">
+                  <div class="preset-row">
+                    <span class="muted" data-i18n="lblPresets">พรีเซ็ตด่วน:</span>
+                    <button type="button" class="chip-btn" data-style-preset="tv">📺 Classic TV</button>
+                    <button type="button" class="chip-btn" data-style-preset="tiktok">🔥 TikTok Viral</button>
+                    <button type="button" class="chip-btn" data-style-preset="cinema">🎬 Netflix Clean</button>
+                  </div>
+
+                  <div class="insp-grid">
+                    <div class="insp-field">
+                      <label data-i18n="lblFontFamily">แบบอักษร (Font)</label>
+                      <select id="insp-font-family">
+                        <option value="Prompt" selected>Prompt (Thai Standard)</option>
+                        <option value="Kanit">Kanit (Modern Drama)</option>
+                        <option value="Sarabun">Sarabun (Formal)</option>
+                        <option value="Inter">Inter (Clean)</option>
+                        <option value="Tahoma">Tahoma</option>
+                      </select>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="lblFontSize">ขนาด (px)</label>
+                      <input id="insp-font-size" type="number" min="12" max="64" value="24" />
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="lblFontWeight">ความหนา</label>
+                      <select id="insp-font-weight">
+                        <option value="400">Regular (400)</option>
+                        <option value="600">Semi-Bold (600)</option>
+                        <option value="700" selected>Bold (700)</option>
+                        <option value="800">Extra Bold (800)</option>
+                      </select>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="lblTextColor">สีตัวอักษร</label>
+                      <div class="color-row">
+                        <input id="insp-font-color" type="color" value="#ffffff" />
+                        <span id="insp-font-color-hex" class="mono-tag">#ffffff</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="lblBgColor">พื้นหลัง &amp; ความทึบ</label>
+                      <div class="color-row">
+                        <input id="insp-bg-color" type="color" value="#000000" />
+                        <input id="insp-bg-opacity" type="range" min="0" max="1" step="0.05" value="0.72" />
+                        <span id="insp-bg-opacity-val" class="mono-tag">72%</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="lblStroke">ขอบตัวอักษร (px)</label>
+                      <div class="color-row">
+                        <input id="insp-stroke-color" type="color" value="#000000" />
+                        <input id="insp-stroke-width" type="number" min="0" max="8" step="0.5" value="2" style="width:62px;" />
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="lblAlign">การจัดวาง</label>
+                      <div class="align-row">
+                        <button type="button" class="chip-btn" data-align="left" data-i18n="alignLeft">ซ้าย</button>
+                        <button type="button" class="chip-btn active" data-align="center" data-i18n="alignCenter">กลาง</button>
+                        <button type="button" class="chip-btn" data-align="right" data-i18n="alignRight">ขวา</button>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="lblPosY">ความสูงตำแหน่ง Y</label>
+                      <div class="color-row">
+                        <input id="insp-pos-y" type="range" min="20" max="95" value="86" />
+                        <span id="insp-pos-y-val" class="mono-tag">86%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="karaoke-row" style="margin-top:9px; padding-top:8px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                    <label class="toggle-check">
+                      <input id="insp-karaoke-enabled" type="checkbox" />
+                      <span data-i18n="lblKaraoke">✨ ซับเด้งคาราโอเกะ (Word-Highlight)</span>
+                    </label>
+                    <div class="color-row">
+                      <span class="muted">Highlight:</span>
+                      <input id="insp-karaoke-color" type="color" value="#fde047" />
+                      <span id="insp-karaoke-color-hex" class="mono-tag">#fde047</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Sub-Tab 2: DELOGO / BLUR BAR -->
+                <div id="insp-pane-delogo" class="insp-pane hidden">
+                  <label class="toggle-check" style="margin-bottom:8px;">
+                    <input id="delogo-enabled" type="checkbox" />
+                    <span data-i18n="delogoEnable">เปิดแถบเบลอ/ปิดทับซับต้นฉบับ (จีน/เกาหลี)</span>
+                  </label>
+                  <div class="insp-grid">
+                    <div class="insp-field">
+                      <label data-i18n="delogoMode">รูปแบบการปิดทับ</label>
+                      <select id="delogo-mode">
+                        <option value="blur" selected data-i18n="delogoBlur">เบลอเนียน (BoxBlur)</option>
+                        <option value="solid" data-i18n="delogoSolid">แถบสีทึบ/โปร่งแสง</option>
+                      </select>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="delogoStrength">ความเข้มการเบลอ</label>
+                      <div class="color-row">
+                        <input id="delogo-strength" type="range" min="4" max="24" value="12" />
+                        <span id="delogo-strength-val" class="mono-tag">12</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="delogoY">ตำแหน่งบนลงล่าง (%)</label>
+                      <div class="color-row">
+                        <input id="delogo-y" type="range" min="0" max="92" value="82" />
+                        <span id="delogo-y-val" class="mono-tag">82%</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="delogoH">ความสูงแถบ (%)</label>
+                      <div class="color-row">
+                        <input id="delogo-h" type="range" min="4" max="35" value="14" />
+                        <span id="delogo-h-val" class="mono-tag">14%</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label>Solid Color &amp; Opacity</label>
+                      <div class="color-row">
+                        <input id="delogo-color" type="color" value="#000000" />
+                        <input id="delogo-opacity" type="range" min="0.2" max="1" step="0.05" value="0.85" />
+                        <span id="delogo-opacity-val" class="mono-tag">85%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Sub-Tab 3: WATERMARK PNG -->
+                <div id="insp-pane-watermark" class="insp-pane hidden">
+                  <div class="wm-top-row">
+                    <label class="toggle-check">
+                      <input id="wm-enabled" type="checkbox" />
+                      <span data-i18n="wmEnable">เปิดใส่โลโก้ช่อง (Watermark PNG)</span>
+                    </label>
+                    <button id="wm-pick-btn" type="button" class="btn btn-secondary btn-xs" data-i18n="wmPick">🖼️ เลือกไฟล์โลโก้ PNG</button>
+                  </div>
+                  <div id="wm-file-label" class="muted" style="margin:4px 0 8px;">No logo selected</div>
+                  <div class="insp-grid">
+                    <div class="insp-field">
+                      <label data-i18n="wmPos">ตำแหน่งมุม</label>
+                      <select id="wm-pos">
+                        <option value="top-right" selected>Top-Right</option>
+                        <option value="top-left">Top-Left</option>
+                        <option value="bottom-right">Bottom-Right</option>
+                        <option value="bottom-left">Bottom-Left</option>
+                      </select>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="wmSize">ขนาดโลโก้ (%)</label>
+                      <div class="color-row">
+                        <input id="wm-width" type="range" min="5" max="30" value="12" />
+                        <span id="wm-width-val" class="mono-tag">12%</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="wmOpacity">ความโปร่งแสง</label>
+                      <div class="color-row">
+                        <input id="wm-opacity" type="range" min="0.15" max="1" step="0.05" value="0.85" />
+                        <span id="wm-opacity-val" class="mono-tag">85%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="margin-top:10px; padding-top:9px; border-top:1px solid var(--border);">
+                    <div class="muted" style="font-weight:700; margin-bottom:6px;" data-i18n="lblIntroOutro">🎞️ ต่อคลิปหัว-ท้ายช่องอัตโนมัติ (Intro / Outro Stitch)</div>
+                    <div class="insp-grid">
+                      <div class="insp-field">
+                        <div class="color-row">
+                          <button id="btn-pick-intro" type="button" class="btn btn-secondary btn-xs">🎞️ เลือก Intro MP4</button>
+                          <button id="btn-clear-intro" type="button" class="btn btn-ghost btn-xs">✕</button>
+                        </div>
+                        <span id="intro-file-label" class="muted">No Intro</span>
+                      </div>
+                      <div class="insp-field">
+                        <div class="color-row">
+                          <button id="btn-pick-outro" type="button" class="btn btn-secondary btn-xs">🎞️ เลือก Outro MP4</button>
+                          <button id="btn-clear-outro" type="button" class="btn btn-ghost btn-xs">✕</button>
+                        </div>
+                        <span id="outro-file-label" class="muted">No Outro</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Sub-Tab 4: BILINGUAL DUAL-SUB & AI TRANSLATE -->
+                <div id="insp-pane-bilingual" class="insp-pane hidden">
+                  <label class="toggle-check" style="margin-bottom:8px;">
+                    <input id="bi-enabled" type="checkbox" />
+                    <span data-i18n="biEnable">เปิดใช้งานโหมดซับ 2 ภาษา (แสดงและฝังพร้อมกัน)</span>
+                  </label>
+                  <div class="insp-grid">
+                    <div class="insp-field">
+                      <label data-i18n="biColor">สีซับภาษาที่ 2</label>
+                      <div class="color-row">
+                        <input id="bi-color" type="color" value="#fde047" />
+                        <span id="bi-color-hex" class="mono-tag">#fde047</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="biScale">ขนาดบรรทัดที่ 2 (%)</label>
+                      <div class="color-row">
+                        <input id="bi-scale" type="range" min="60" max="100" value="78" />
+                        <span id="bi-scale-val" class="mono-tag">78%</span>
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="biTranslateTo">แปลซับ AI เป็น:</label>
+                      <select id="studio-translate-lang">
+                        <option value="en">🇺🇸 English</option>
+                        <option value="th">🇹🇭 ภาษาไทย (Thai)</option>
+                        <option value="zh">🇨🇳 中文 (Chinese)</option>
+                        <option value="ja">🇯🇵 日本語 (Japanese)</option>
+                        <option value="ko">🇰🇷 한국어 (Korean)</option>
+                      </select>
+                    </div>
+                    <div class="insp-field">
+                      <label data-i18n="biTargetTrack">ใส่ผลแปลไว้ที่:</label>
+                      <select id="studio-translate-track">
+                        <option value="secondary" selected data-i18n="biTrackSecondary">บรรทัดที่ 2 (คงต้นฉบับไว้บรรทัดบน)</option>
+                        <option value="primary" data-i18n="biTrackPrimary">แทนที่บรรทัดหลัก</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button id="studio-translate-btn" type="button" class="btn btn-primary btn-sm" style="width:100%; margin-top:8px;" data-i18n="btnTranslateNow">✨ แปลซับ AI ทันที</button>
+                </div>
+
+                <!-- Sub-Tab 5: CUT / RIPPLE SYNC & 1-CLICK 9:16 VIRAL SHORTS -->
+                <div id="insp-pane-cutshorts" class="insp-pane hidden">
+                  <div id="cut-status-box" class="summary-box" style="margin-bottom:8px;">
+                    In: <strong>00:00</strong> • Out: <strong>End</strong> • Cut-Out Zones: <strong>0</strong>
+                  </div>
+                  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+                    <label class="toggle-check">
+                      <input id="cut-burn-subs" type="checkbox" checked />
+                      <span>ฝังซับลงคลิปที่ตัดด้วย (WYSIWYG + Ripple Sync)</span>
+                    </label>
+                    <button id="btn-render-cut" type="button" class="btn btn-accent btn-sm" data-i18n="btnRenderCut">✂️ ส่งออกคลิปที่ตัด + ซับขยับตาม</button>
+                  </div>
+
+                  <div style="border-top:1px solid var(--border); padding-top:9px;">
+                    <div class="insp-grid">
+                      <div class="insp-field">
+                        <label data-i18n="lblShortsHeadline">พาดหัวคลิป 9:16 (ด้านบน)</label>
+                        <input id="shorts-headline" type="text" placeholder="เช่น EP.12 เมื่อท่านอ๋องรู้ความจริง!" />
+                      </div>
+                      <div class="insp-field">
+                        <label data-i18n="lblShortsBg">พื้นหลัง 9:16</label>
+                        <div class="color-row">
+                          <select id="shorts-bg-mode" style="flex:1;">
+                            <option value="blur" selected>Blur Background (ละคร 16:9 ตรงกลาง)</option>
+                            <option value="crop_fill">Center Crop Full 9:16</option>
+                            <option value="solid">Dark Cinema Solid</option>
+                          </select>
+                          <input id="shorts-headline-color" type="color" value="#fde047" title="Headline Color" />
+                        </div>
+                      </div>
+                    </div>
+                    <button id="btn-render-shorts" type="button" class="btn btn-primary btn-sm" style="width:100%; margin-top:8px;" data-i18n="btnRenderShorts">📱 สร้างคลิปสั้น 9:16 (TikTok/Reels)</button>
+                  </div>
+                </div>
+
+                <!-- Sub-Tab 6: SERIES GLOSSARY (CHARACTER DICTIONARY) -->
+                <div id="insp-pane-glossary" class="insp-pane hidden">
+                  <div class="glossary-top-row">
+                    <select id="glossary-series-select" style="flex:1;"></select>
+                    <input id="glossary-new-series-input" type="text" placeholder="ชื่อเรื่องใหม่..." style="width:130px;" />
+                    <button id="glossary-create-series-btn" type="button" class="btn btn-ghost btn-xs">➕ เรื่องใหม่</button>
+                    <button id="glossary-apply-btn" type="button" class="btn btn-accent btn-xs" data-i18n="btnGlossaryApply">✨ Auto-Fix ชื่อตัวละครทั้งตอน</button>
+                  </div>
+                  <div class="glossary-add-row">
+                    <input id="glossary-wrong-input" type="text" placeholder="คำที่มักผิด (เช่น ท่านออง)" />
+                    <span class="muted">→</span>
+                    <input id="glossary-right-input" type="text" placeholder="คำที่ถูกต้อง (เช่น ท่านอ๋อง)" />
+                    <button id="glossary-add-rule-btn" type="button" class="btn btn-secondary btn-xs" data-i18n="btnGlossaryAdd">➕ เพิ่มคำศัพท์</button>
+                  </div>
+                  <div id="glossary-rules-list" class="glossary-rules-list"></div>
+                </div>
+              </div>
+            </section>
+
+            <!-- RIGHT PANE: Cue Editor -->
+            <section class="card studio-editor-panel">
+              <div class="editor-filter-row">
+                <input id="studio-filter-input" type="text" data-i18n-ph="filterCuePh" placeholder="🔍 กรองค้นหาข้อความในซับ..." />
+                <span id="studio-cue-stats" class="muted">0 cues • 0 CPS</span>
+                <button id="studio-add-cue-btn" type="button" class="btn btn-secondary btn-xs" data-i18n="btnAddCue">➕ แทรกซับ</button>
+              </div>
+
+              <div class="find-replace-bar">
+                <input id="studio-find-input" type="text" data-i18n-ph="findPh" placeholder="ค้นหาคำ..." />
+                <input id="studio-replace-input" type="text" data-i18n-ph="replacePh" placeholder="แทนที่ด้วย..." />
+                <button id="studio-replace-all-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnReplaceAll">แทนที่ทั้งหมด</button>
+              </div>
+
+              <div class="offset-bar">
+                <span class="muted" data-i18n="lblShiftAll">เลื่อนเวลาทั้งเรื่อง:</span>
+                <button type="button" class="btn btn-ghost btn-xs" data-offset="-1.0">-1.0s</button>
+                <button type="button" class="btn btn-ghost btn-xs" data-offset="-0.5">-0.5s</button>
+                <button type="button" class="btn btn-ghost btn-xs" data-offset="-0.1">-0.1s</button>
+                <button type="button" class="btn btn-ghost btn-xs" data-offset="0.1">+0.1s</button>
+                <button type="button" class="btn btn-ghost btn-xs" data-offset="0.5">+0.5s</button>
+                <button type="button" class="btn btn-ghost btn-xs" data-offset="1.0">+1.0s</button>
+                <button id="studio-reset-offset-btn" type="button" class="btn btn-danger-ghost btn-xs" data-i18n="btnResetShift">รีเซ็ต</button>
+                <span id="studio-offset-badge" class="mono-tag">0.0s</span>
+              </div>
+
+              <div id="studio-segments-list" class="segments-list"></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- MODAL: Export MP4 (Hardsub WYSIWYG / Softsub Stream-Copy) -->
+    <div id="modal-export" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3 data-i18n="modalExportTitle">🎬 ส่งออกวิดีโอ MP4 (ประมวลผลบนเครื่อง — 0% โหลดเซิร์ฟเวอร์)</h3>
+          <button type="button" class="btn-icon" data-close-modal="modal-export">✕</button>
+        </div>
+        <div class="modal-body">
+          <label class="radio-card">
+            <input type="radio" name="export-mode" value="hardsub" checked />
+            <span data-i18n="exportModeHardsub">🔥 Hardsub MP4 (ฝังซับตาม Style Inspector + เบลอซับเดิม + โลโก้)</span>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="export-mode" value="softsub" />
+            <span data-i18n="exportModeSoftsub">📎 Softsub MP4 (เปิด/ปิดซับได้ — Stream Copy เสร็จใน 1–2 วินาที)</span>
+          </label>
+
+          <div class="insp-field" id="export-res-wrap" style="margin-top:10px;">
+            <label for="export-resolution" data-i18n="exportResLabel">ความละเอียดวิดีโอ</label>
+            <select id="export-resolution">
+              <option value="original" selected data-i18n="exportResOrig">ต้นฉบับ (Original)</option>
+              <option value="1080p">1080p Full HD</option>
+              <option value="720p">720p HD</option>
+              <option value="480p">480p SD</option>
+            </select>
+          </div>
+
+          <div id="export-summary-box" class="summary-box"></div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost btn-sm" data-close-modal="modal-export" data-i18n="btnCancel">ยกเลิก</button>
+          <button id="modal-start-render-btn" type="button" class="btn btn-primary btn-sm" data-i18n="btnStartRender">🚀 เริ่มส่งออก MP4</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: Quality Audit Matrix -->
+    <div id="modal-audit" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3 data-i18n="modalAuditTitle">🛡️ รายงานตรวจสอบคุณภาพซับไตเติล (Quality Audit)</h3>
+          <button type="button" class="btn-icon" data-close-modal="modal-audit">✕</button>
+        </div>
+        <div id="modal-audit-body" class="modal-body"></div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary btn-sm" data-close-modal="modal-audit" data-i18n="btnClose">ปิดหน้าต่าง</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: AI Summary -->
+    <div id="modal-summary" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3 data-i18n="modalSummaryTitle">🧠 สรุปใจความสำคัญ &amp; คีย์เวิร์ด (AI Summary)</h3>
+          <button type="button" class="btn-icon" data-close-modal="modal-summary">✕</button>
+        </div>
+        <div id="modal-summary-body" class="modal-body"></div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary btn-sm" data-close-modal="modal-summary" data-i18n="btnClose">ปิดหน้าต่าง</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: Create Subtitles via Cloud AutoSubAI (Smart Credit + Free-Trial Plan-2 Gate) -->
+    <div id="modal-cloud-ai" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3>✨ สร้างซับอัตโนมัติด้วย Cloud AutoSubAI</h3>
+          <button type="button" class="btn-icon" data-close-modal="modal-cloud-ai">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="font-weight:700;font-size:13.5px;" id="cloud-ai-proj-name">video.mp4</div>
+          <div class="insp-grid">
+            <div class="insp-field">
+              <label for="cloud-ai-plan">เลือกแผน AI (Plan)</label>
+              <select id="cloud-ai-plan">
+                <option value="plan-1">Plan 1 • CleanVoice™ — ฿0.05/min</option>
+                <option value="plan-2" selected>Plan 2 • LipSync Pro™ — ฿0.10/min</option>
+                <option value="plan-3">Plan 3 • Studio Masterpiece™ — ฿0.195/min</option>
+              </select>
+            </div>
+            <div class="insp-field">
+              <label for="cloud-ai-lang">ภาษาต้นฉบับ</label>
+              <select id="cloud-ai-lang">
+                <option value="th" selected>🇹🇭 ภาษาไทย (Thai)</option>
+                <option value="auto">🌐 Auto Detect</option>
+                <option value="en">🇺🇸 English</option>
+                <option value="zh">🇨🇳 中文 (Chinese)</option>
+                <option value="ja">🇯🇵 日本語 (Japanese)</option>
+                <option value="ko">🇰🇷 한국어 (Korean)</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="cloud-ai-status-box" class="summary-box"></div>
+
+          <div id="cloud-ai-progress-wrap" class="hidden" style="margin-top:4px;">
+            <div class="progress-track"><div id="cloud-ai-progress-fill" class="progress-fill" style="width:10%"></div></div>
+            <div id="cloud-ai-progress-text" class="muted" style="margin-top:5px;">Starting...</div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost btn-sm" data-close-modal="modal-cloud-ai" data-i18n="btnCancel">ยกเลิก</button>
+          <button id="cloud-ai-login-btn" type="button" class="btn btn-primary btn-sm hidden">🔐 เข้าสู่ระบบ (รับเครดิตฟรี ฿10!)</button>
+          <button id="cloud-ai-topup-btn" type="button" class="btn btn-accent btn-sm hidden">💳 ไปหน้าเติมเงิน (PromptPay)</button>
+          <button id="cloud-ai-start-btn" type="button" class="btn btn-primary btn-sm hidden">🚀 เริ่มสร้างซับด้วย Cloud AI</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  </div>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/waveform.js"></script>
+  <script src="js/glossary.js"></script>
+  <script src="js/local_projects.js"></script>
+  <script src="js/studio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
