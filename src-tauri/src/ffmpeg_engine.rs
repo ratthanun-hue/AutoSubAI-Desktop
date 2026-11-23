@@ -1516,3 +1516,715 @@ pub async fn generate_local_thumbnail(
 
     Err("ไม่สามารถสร้างภาพปกจากไฟล์นี้ได้ (อาจเป็นไฟล์เสียงล้วน)".to_string())
 }
+
+// =========================================================================
+// PHASE 1 (v1.2.0): PRO SPLIT, DEMUX & MULTI-CLIP MERGE ENGINE
+// =========================================================================
+
+fn format_vtt_ts(sec: f64) -> String {
+    let clamped = sec.max(0.0);
+    let total_ms = (clamped * 1000.0).round() as u64;
+    let h = total_ms / 3_600_000;
+    let m = (total_ms % 3_600_000) / 60_000;
+    let s = (total_ms % 60_000) / 1000;
+    let ms = total_ms % 1000;
+    format!("{:02}:{:02}:{:02}.{:03}", h, m, s, ms)
+}
+
+fn build_vtt_document(cues: &[CueItem], bilingual: bool) -> String {
+    let mut out = String::from("WEBVTT\n\n");
+    for cue in cues {
+        let p = cue.text.trim();
+        let s = cue.secondary_text.trim();
+        if p.is_empty() && s.is_empty() {
+            continue;
+        }
+        out.push_str(&format!(
+            "{} --> {}\n",
+            format_vtt_ts(cue.start),
+            format_vtt_ts(cue.end.max(cue.start + 0.1))
+        ));
+        if bilingual && !s.is_empty() {
+            out.push_str(p);
+            out.push('\n');
+            out.push_str(s);
+        } else if !p.is_empty() {
+            out.push_str(p);
+        } else {
+            out.push_str(s);
+        }
+        out.push_str("\n\n");
+    }
+    out
+}
+
+async fn probe_has_audio_stream(ffmpeg: &str, path: &str) -> bool {
+    let mut cmd = Command::new(ffmpeg);
+    cmd.args(["-hide_banner", "-i", path]);
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(0x08000000);
+    }
+    match cmd.output().await {
+        Ok(out) => String::from_utf8_lossy(&out.stderr).contains("Audio:"),
+        Err(_) => false,
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SplitPartSpec {
+    pub index: usize,
+    pub start: f64,
+    pub end: f64,
+    #[serde(default)]
+    pub cues: Vec<CueItem>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct SplitMediaRequest {
+    pub video_path: String,
+    pub output_dir: Option<String>,
+    pub parts: Vec<SplitPartSpec>,
+    pub mode: String, // "lossless" | "precision"
+    pub burn_subs: bool,
+    pub save_srt: bool,
+    pub save_vtt: bool,
+    pub style: SubtitleStyleConfig,
+    pub delogo: DelogoConfig,
+    pub watermark: WatermarkConfig,
+}
+
+impl Default for SplitMediaRequest {
+    fn default() -> Self {
+        Self {
+            video_path: String::new(),
+            output_dir: None,
+            parts: Vec::new(),
+            mode: "lossless".to_string(),
+            burn_subs: false,
+            save_srt: true,
+            save_vtt: false,
+            style: SubtitleStyleConfig::default(),
+            delogo: DelogoConfig::default(),
+            watermark: WatermarkConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SplitPartOutput {
+    pub index: usize,
+    pub video_path: String,
+    pub srt_path: Option<String>,
+    pub vtt_path: Option<String>,
+    pub duration: f64,
+    pub cue_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SplitMediaResult {
+    pub output_dir: String,
+    pub parts: Vec<SplitPartOutput>,
+    pub mode: String,
+}
+
+pub async fn split_media_parts(
+    app: &AppHandle,
+    req: SplitMediaRequest,
+) -> Result<SplitMediaResult, String> {
+    let (ffmpeg, _) = resolve_ffmpeg_binary()
+        .ok_or_else(|| "ไม่พบ FFmpeg ในเครื่องสำหรับแยกไฟล์".to_string())?;
+
+    let src = Path::new(&req.video_path);
+    if !src.is_file() {
+        return Err("ไม่พบไฟล์วิดีโอต้นฉบับในเครื่อง".to_string());
+    }
+    if req.parts.is_empty() {
+        return Err("ไม่มีช่วงเวลาที่จะแยกไฟล์".to_string());
+    }
+
+    let stem = src
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("video")
+        .to_string();
+    let parent = src.parent().unwrap_or_else(|| Path::new("."));
+
+    let out_dir = match req.output_dir.as_deref().map(str::trim) {
+        Some(d) if !d.is_empty() => PathBuf::from(d),
+        _ => parent.join(format!("{}_parts", stem)),
+    };
+    tokio::fs::create_dir_all(&out_dir)
+        .await
+        .map_err(|e| format!("สร้างโฟลเดอร์ปลายทางไม่สำเร็จ: {}", e))?;
+
+    let probe = probe_media(&req.video_path).await.ok();
+    let vid_w = probe.as_ref().and_then(|p| p.width).unwrap_or(1920);
+    let vid_h = probe.as_ref().and_then(|p| p.height).unwrap_or(1080);
+    let fonts_dir = find_bundled_fonts_dir(app);
+    let is_precision = req.mode.trim().eq_ignore_ascii_case("precision") || req.burn_subs;
+
+    #[cfg(target_os = "macos")]
+    let encoders: Vec<(&str, Vec<&str>)> = vec![
+        ("h264_videotoolbox", vec!["-c:v", "h264_videotoolbox", "-b:v", "6M"]),
+        ("libx264", vec!["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"]),
+    ];
+    #[cfg(target_os = "windows")]
+    let encoders: Vec<(&str, Vec<&str>)> = vec![
+        ("h264_nvenc", vec!["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "22"]),
+        ("libx264", vec!["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"]),
+    ];
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let encoders: Vec<(&str, Vec<&str>)> = vec![
+        ("libx264", vec!["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"]),
+    ];
+
+    let mut outputs: Vec<SplitPartOutput> = Vec::new();
+    let ts_base = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+
+    for part in &req.parts {
+        let start = part.start.max(0.0);
+        let dur = (part.end - start).max(0.2);
+        let part_num = if part.index == 0 { outputs.len() + 1 } else { part.index };
+        let base_name = format!("{}_part{:02}", stem, part_num);
+        let out_video = out_dir.join(format!("{}.mp4", base_name));
+        let out_video_str = out_video
+            .to_str()
+            .ok_or_else(|| "พาธปลายทางไม่ถูกต้อง".to_string())?;
+
+        let ss_str = format!("{:.3}", start);
+        let dur_str = format!("{:.3}", dur);
+
+        if !is_precision {
+            let mut cmd = Command::new(&ffmpeg);
+            cmd.args([
+                "-y",
+                "-ss",
+                &ss_str,
+                "-i",
+                &req.video_path,
+                "-t",
+                &dur_str,
+                "-map",
+                "0:v?",
+                "-map",
+                "0:a?",
+                "-c",
+                "copy",
+                "-avoid_negative_ts",
+                "make_zero",
+                "-movflags",
+                "+faststart",
+                out_video_str,
+            ]);
+            #[cfg(target_os = "windows")]
+            {
+                cmd.creation_flags(0x08000000);
+            }
+            let out = cmd
+                .output()
+                .await
+                .map_err(|e| format!("รัน FFmpeg แยกไฟล์ไม่สำเร็จ: {}", e))?;
+            if !out.status.success() {
+                let err_tail = String::from_utf8_lossy(&out.stderr);
+                return Err(format!(
+                    "แยกไฟล์ตอนที่ {} ไม่สำเร็จ: {}",
+                    part_num,
+                    err_tail.chars().rev().take(240).collect::<String>().chars().rev().collect::<String>()
+                ));
+            }
+        } else {
+            let mut temp_ass: Option<PathBuf> = None;
+            let mut vf_parts: Vec<String> = Vec::new();
+            if req.burn_subs && !part.cues.is_empty() {
+                let ass_text = build_ass_document(&part.cues, &req.style, vid_w, vid_h);
+                let ass_path = std::env::temp_dir()
+                    .join(format!("autosub_split_{}_{}.ass", ts_base, part_num));
+                tokio::fs::write(&ass_path, ass_text.as_bytes())
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let esc_ass = escape_ffmpeg_filter_path(ass_path.to_str().unwrap_or(""));
+                if let Some(ref fdir) = fonts_dir {
+                    let esc_fd = escape_ffmpeg_filter_path(fdir);
+                    vf_parts.push(format!("ass='{}':fontsdir='{}'", esc_ass, esc_fd));
+                } else {
+                    vf_parts.push(format!("ass='{}'", esc_ass));
+                }
+                temp_ass = Some(ass_path);
+            }
+
+            let mut ok = false;
+            let mut last_err = String::new();
+            for (_enc_name, enc_args) in &encoders {
+                let mut cmd = Command::new(&ffmpeg);
+                cmd.args(["-y", "-ss", &ss_str, "-t", &dur_str, "-i", &req.video_path]);
+                if !vf_parts.is_empty() {
+                    cmd.args(["-vf", &vf_parts.join(",")]);
+                }
+                cmd.args(enc_args);
+                cmd.args([
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "192k",
+                    "-movflags",
+                    "+faststart",
+                    out_video_str,
+                ]);
+                #[cfg(target_os = "windows")]
+                {
+                    cmd.creation_flags(0x08000000);
+                }
+                match cmd.output().await {
+                    Ok(o) if o.status.success() => {
+                        ok = true;
+                        break;
+                    }
+                    Ok(o) => {
+                        let s = String::from_utf8_lossy(&o.stderr);
+                        last_err = s.chars().rev().take(240).collect::<String>().chars().rev().collect::<String>();
+                    }
+                    Err(e) => last_err = e.to_string(),
+                }
+            }
+            if let Some(p) = temp_ass {
+                let _ = tokio::fs::remove_file(p).await;
+            }
+            if !ok {
+                return Err(format!("แยกไฟล์ (Precision) ตอนที่ {} ไม่สำเร็จ: {}", part_num, last_err));
+            }
+        }
+
+        let mut srt_saved = None;
+        let mut vtt_saved = None;
+        if req.save_srt && !part.cues.is_empty() {
+            let srt_path = out_dir.join(format!("{}.srt", base_name));
+            let srt_text = build_srt_document(&part.cues, req.style.bilingual_enabled);
+            tokio::fs::write(&srt_path, srt_text.as_bytes())
+                .await
+                .map_err(|e| format!("บันทึก SRT ตอนที่ {} ไม่สำเร็จ: {}", part_num, e))?;
+            srt_saved = Some(srt_path.to_string_lossy().to_string());
+        }
+        if req.save_vtt && !part.cues.is_empty() {
+            let vtt_path = out_dir.join(format!("{}.vtt", base_name));
+            let vtt_text = build_vtt_document(&part.cues, req.style.bilingual_enabled);
+            tokio::fs::write(&vtt_path, vtt_text.as_bytes())
+                .await
+                .map_err(|e| format!("บันทึก VTT ตอนที่ {} ไม่สำเร็จ: {}", part_num, e))?;
+            vtt_saved = Some(vtt_path.to_string_lossy().to_string());
+        }
+
+        outputs.push(SplitPartOutput {
+            index: part_num,
+            video_path: out_video_str.to_string(),
+            srt_path: srt_saved,
+            vtt_path: vtt_saved,
+            duration: dur,
+            cue_count: part.cues.len(),
+        });
+    }
+
+    Ok(SplitMediaResult {
+        output_dir: out_dir.to_string_lossy().to_string(),
+        parts: outputs,
+        mode: if is_precision { "precision".to_string() } else { "lossless".to_string() },
+    })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DemuxExtractRequest {
+    pub video_path: String,
+    pub track_type: String, // "audio_mp3" | "audio_wav" | "audio_m4a" | "video_mute"
+    pub output_path: Option<String>,
+}
+
+pub async fn demux_extract_track(req: DemuxExtractRequest) -> Result<HardsubResult, String> {
+    let (ffmpeg, _) = resolve_ffmpeg_binary()
+        .ok_or_else(|| "ไม่พบ FFmpeg ในเครื่อง".to_string())?;
+
+    let src = Path::new(&req.video_path);
+    if !src.is_file() {
+        return Err("ไม่พบไฟล์ต้นฉบับในเครื่อง".to_string());
+    }
+
+    let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("media");
+    let parent = src.parent().unwrap_or_else(|| Path::new("."));
+    let kind = req.track_type.trim().to_lowercase();
+
+    let (default_suffix, args): (&str, Vec<&str>) = match kind.as_str() {
+        "audio_wav" => ("_audio_16k.wav", vec!["-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le"]),
+        "audio_m4a" => ("_audio.m4a", vec!["-vn", "-c:a", "aac", "-b:a", "192k"]),
+        "video_mute" => ("_mute.mp4", vec!["-an", "-c:v", "copy", "-movflags", "+faststart"]),
+        _ => ("_audio.mp3", vec!["-vn", "-c:a", "libmp3lame", "-q:a", "2"]),
+    };
+
+    let out_path = match req.output_path.as_deref().map(str::trim) {
+        Some(p) if !p.is_empty() => PathBuf::from(p),
+        _ => parent.join(format!("{}{}", stem, default_suffix)),
+    };
+    let out_str = out_path.to_str().ok_or("Invalid output path")?;
+
+    let mut cmd = Command::new(&ffmpeg);
+    cmd.args(["-y", "-i", &req.video_path]);
+    cmd.args(&args);
+    cmd.arg(out_str);
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(0x08000000);
+    }
+
+    let out = cmd
+        .output()
+        .await
+        .map_err(|e| format!("รัน FFmpeg แยกแทร็กไม่สำเร็จ: {}", e))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        return Err(format!(
+            "แยกแทร็กไม่สำเร็จ: {}",
+            err.chars().rev().take(240).collect::<String>().chars().rev().collect::<String>()
+        ));
+    }
+
+    Ok(HardsubResult {
+        output_path: out_str.to_string(),
+        encoder_used: kind.clone(),
+        mode: kind,
+    })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MergeClipInput {
+    pub video_path: String,
+    #[serde(default)]
+    pub cues: Vec<CueItem>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct MergeMediaRequest {
+    pub clips: Vec<MergeClipInput>,
+    pub output_path: Option<String>,
+    pub mode: String,              // "lossless" | "conform"
+    pub target_resolution: String, // "original" | "1080p" | "720p" | "916"
+    pub transition: String,        // "none" | "fade"
+    pub save_merged_srt: bool,
+    pub save_merged_vtt: bool,
+    pub bilingual_enabled: bool,
+}
+
+impl Default for MergeMediaRequest {
+    fn default() -> Self {
+        Self {
+            clips: Vec::new(),
+            output_path: None,
+            mode: "lossless".to_string(),
+            target_resolution: "original".to_string(),
+            transition: "none".to_string(),
+            save_merged_srt: true,
+            save_merged_vtt: false,
+            bilingual_enabled: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MergeMediaResult {
+    pub output_path: String,
+    pub srt_path: Option<String>,
+    pub vtt_path: Option<String>,
+    pub total_duration: f64,
+    pub merged_cues: Vec<CueItem>,
+    pub clip_count: usize,
+    pub mode: String,
+    pub encoder_used: String,
+}
+
+pub async fn merge_media_clips(req: MergeMediaRequest) -> Result<MergeMediaResult, String> {
+    let (ffmpeg, _) = resolve_ffmpeg_binary()
+        .ok_or_else(|| "ไม่พบ FFmpeg ในเครื่องสำหรับรวมไฟล์".to_string())?;
+
+    if req.clips.len() < 2 {
+        return Err("กรุณาเลือกไฟล์อย่างน้อย 2 ไฟล์เพื่อรวมเป็นไฟล์เดียว".to_string());
+    }
+
+    for clip in &req.clips {
+        if !Path::new(&clip.video_path).is_file() {
+            return Err(format!("ไม่พบไฟล์ต้นฉบับ: {}", clip.video_path));
+        }
+    }
+
+    let first_path = Path::new(&req.clips[0].video_path);
+    let first_stem = first_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("merged");
+    let first_parent = first_path.parent().unwrap_or_else(|| Path::new("."));
+
+    let out_path = match req.output_path.as_deref().map(str::trim) {
+        Some(p) if !p.is_empty() => PathBuf::from(p),
+        _ => first_parent.join(format!("{}_merged.mp4", first_stem)),
+    };
+    let out_str = out_path.to_str().ok_or("Invalid output path")?;
+
+    // 1. Probe every clip for exact duration, dimensions, and audio presence -> stitch cues with exact offset
+    let mut durations: Vec<f64> = Vec::with_capacity(req.clips.len());
+    let mut has_audios: Vec<bool> = Vec::with_capacity(req.clips.len());
+    let mut first_w: u32 = 1920;
+    let mut first_h: u32 = 1080;
+    let mut merged_cues: Vec<CueItem> = Vec::new();
+    let mut offset: f64 = 0.0;
+
+    for (idx, clip) in req.clips.iter().enumerate() {
+        let info = probe_media(&clip.video_path).await?;
+        let dur = info.duration_seconds.unwrap_or(0.0).max(0.1);
+        if idx == 0 {
+            if let (Some(w), Some(h)) = (info.width, info.height) {
+                first_w = (w / 2) * 2;
+                first_h = (h / 2) * 2;
+            }
+        }
+        let ha = probe_has_audio_stream(&ffmpeg, &clip.video_path).await;
+        for c in &clip.cues {
+            if c.text.trim().is_empty() && c.secondary_text.trim().is_empty() {
+                continue;
+            }
+            merged_cues.push(CueItem {
+                start: ((c.start.max(0.0) + offset) * 1000.0).round() / 1000.0,
+                end: ((c.end.max(c.start + 0.1) + offset) * 1000.0).round() / 1000.0,
+                text: c.text.clone(),
+                secondary_text: c.secondary_text.clone(),
+            });
+        }
+        durations.push(dur);
+        has_audios.push(ha);
+        offset += dur;
+    }
+
+    let total_duration = offset;
+    let want_lossless = req.mode.trim().eq_ignore_ascii_case("lossless")
+        && !req.transition.trim().eq_ignore_ascii_case("fade")
+        && req.target_resolution.trim().eq_ignore_ascii_case("original");
+
+    let mut used_mode = "conform".to_string();
+    let mut encoder_used = "copy".to_string();
+    let mut lossless_ok = false;
+
+    // 2. Try Fast Lossless Concat Demuxer first when requested
+    if want_lossless {
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let list_path = std::env::temp_dir().join(format!("autosub_merge_{}.txt", ts));
+        let mut list_content = String::new();
+        for clip in &req.clips {
+            let norm = clip.video_path.replace('\\', "/").replace('\'', "'\\''");
+            list_content.push_str(&format!("file '{}'\n", norm));
+        }
+        tokio::fs::write(&list_path, list_content.as_bytes())
+            .await
+            .map_err(|e| format!("สร้างรายการรวมไฟล์ไม่สำเร็จ: {}", e))?;
+
+        let mut cmd = Command::new(&ffmpeg);
+        cmd.args([
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            list_path.to_str().unwrap_or(""),
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            out_str,
+        ]);
+        #[cfg(target_os = "windows")]
+        {
+            cmd.creation_flags(0x08000000);
+        }
+        if let Ok(out) = cmd.output().await {
+            if out.status.success() {
+                lossless_ok = true;
+                used_mode = "lossless".to_string();
+                encoder_used = "stream_copy".to_string();
+            }
+        }
+        let _ = tokio::fs::remove_file(&list_path).await;
+    }
+
+    // 3. Smart Auto-Conform Merge (works across different codecs, resolutions, FPS, MP4/MKV/MOV + optional Fade!)
+    if !lossless_ok {
+        let (target_w, target_h) = match req.target_resolution.trim().to_lowercase().as_str() {
+            "1080p" => (1920u32, 1080u32),
+            "720p" => (1280u32, 720u32),
+            "916" | "9:16" => (1080u32, 1920u32),
+            _ => (first_w.max(320), first_h.max(240)),
+        };
+        let use_fade = req.transition.trim().eq_ignore_ascii_case("fade");
+
+        let mut filter_parts: Vec<String> = Vec::new();
+        let mut concat_inputs = String::new();
+
+        for i in 0..req.clips.len() {
+            let dur = durations[i];
+            let mut v_chain = format!(
+                "[{i}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30,format=yuv420p",
+                i = i,
+                w = target_w,
+                h = target_h
+            );
+            if use_fade && dur > 1.2 {
+                let fade_d = 0.35;
+                if i > 0 {
+                    v_chain.push_str(&format!(",fade=t=in:st=0:d={:.2}", fade_d));
+                }
+                if i + 1 < req.clips.len() {
+                    let st_out = (dur - fade_d).max(0.1);
+                    v_chain.push_str(&format!(",fade=t=out:st={:.2}:d={:.2}", st_out, fade_d));
+                }
+            }
+            v_chain.push_str(&format!("[v{}]", i));
+            filter_parts.push(v_chain);
+
+            if has_audios[i] {
+                let mut a_chain = format!(
+                    "[{i}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo",
+                    i = i
+                );
+                if use_fade && dur > 1.2 {
+                    let fade_d = 0.30;
+                    if i > 0 {
+                        a_chain.push_str(&format!(",afade=t=in:st=0:d={:.2}", fade_d));
+                    }
+                    if i + 1 < req.clips.len() {
+                        let st_out = (dur - fade_d).max(0.1);
+                        a_chain.push_str(&format!(",afade=t=out:st={:.2}:d={:.2}", st_out, fade_d));
+                    }
+                }
+                a_chain.push_str(&format!("[a{}]", i));
+                filter_parts.push(a_chain);
+            } else {
+                filter_parts.push(format!(
+                    "anullsrc=channel_layout=stereo:sample_rate=48000,atrim=0:{:.3},asetpts=PTS-STARTPTS[a{}]",
+                    dur, i
+                ));
+            }
+            concat_inputs.push_str(&format!("[v{}][a{}]", i, i));
+        }
+
+        filter_parts.push(format!(
+            "{}concat=n={}:v=1:a=1[vout][aout]",
+            concat_inputs,
+            req.clips.len()
+        ));
+        let filter_complex = filter_parts.join(";");
+
+        #[cfg(target_os = "macos")]
+        let encoders: Vec<(&str, Vec<&str>)> = vec![
+            ("h264_videotoolbox", vec!["-c:v", "h264_videotoolbox", "-b:v", "6M"]),
+            ("libx264", vec!["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"]),
+        ];
+        #[cfg(target_os = "windows")]
+        let encoders: Vec<(&str, Vec<&str>)> = vec![
+            ("h264_nvenc", vec!["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "22"]),
+            ("libx264", vec!["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"]),
+        ];
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        let encoders: Vec<(&str, Vec<&str>)> = vec![
+            ("libx264", vec!["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"]),
+        ];
+
+        let mut merged_ok = false;
+        let mut last_err = String::new();
+        for (enc_name, enc_args) in &encoders {
+            let mut cmd = Command::new(&ffmpeg);
+            cmd.arg("-y");
+            for clip in &req.clips {
+                cmd.args(["-i", &clip.video_path]);
+            }
+            cmd.args([
+                "-filter_complex",
+                &filter_complex,
+                "-map",
+                "[vout]",
+                "-map",
+                "[aout]",
+            ]);
+            cmd.args(enc_args);
+            cmd.args([
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-movflags",
+                "+faststart",
+                out_str,
+            ]);
+            #[cfg(target_os = "windows")]
+            {
+                cmd.creation_flags(0x08000000);
+            }
+            match cmd.output().await {
+                Ok(out) if out.status.success() => {
+                    merged_ok = true;
+                    used_mode = "conform".to_string();
+                    encoder_used = enc_name.to_string();
+                    break;
+                }
+                Ok(out) => {
+                    let s = String::from_utf8_lossy(&out.stderr);
+                    last_err = s.chars().rev().take(280).collect::<String>().chars().rev().collect::<String>();
+                }
+                Err(e) => last_err = e.to_string(),
+            }
+        }
+        if !merged_ok {
+            return Err(format!("รวมไฟล์วิดีโอไม่สำเร็จ: {}", last_err));
+        }
+    }
+
+    // 4. Write merged SRT / VTT next to output MP4 if any clips had subtitles
+    let mut srt_saved = None;
+    let mut vtt_saved = None;
+    if !merged_cues.is_empty() {
+        let out_stem = out_path.file_stem().and_then(|s| s.to_str()).unwrap_or("merged");
+        let out_dir = out_path.parent().unwrap_or(first_parent);
+        if req.save_merged_srt {
+            let p = out_dir.join(format!("{}.srt", out_stem));
+            let content = build_srt_document(&merged_cues, req.bilingual_enabled);
+            tokio::fs::write(&p, content.as_bytes())
+                .await
+                .map_err(|e| format!("บันทึกซับรวม .srt ไม่สำเร็จ: {}", e))?;
+            srt_saved = Some(p.to_string_lossy().to_string());
+        }
+        if req.save_merged_vtt {
+            let p = out_dir.join(format!("{}.vtt", out_stem));
+            let content = build_vtt_document(&merged_cues, req.bilingual_enabled);
+            tokio::fs::write(&p, content.as_bytes())
+                .await
+                .map_err(|e| format!("บันทึกซับรวม .vtt ไม่สำเร็จ: {}", e))?;
+            vtt_saved = Some(p.to_string_lossy().to_string());
+        }
+    }
+
+    Ok(MergeMediaResult {
+        output_path: out_str.to_string(),
+        srt_path: srt_saved,
+        vtt_path: vtt_saved,
+        total_duration,
+        merged_cues,
+        clip_count: req.clips.len(),
+        mode: used_mode,
+        encoder_used,
+    })
+}

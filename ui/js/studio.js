@@ -751,7 +751,9 @@
       this.inPoint = null;
       this.outPoint = null;
       this.cutZones = [];
+      this.splitMarkers = [];
       this.waveformPeaks = [];
+      if (this.host.onProjectChanged) this.host.onProjectChanged();
       $('studio-offset-badge').textContent = '0.0s';
 
       this.loadVideoSource();
@@ -845,6 +847,7 @@
         this.inPoint = null;
         this.outPoint = null;
         this.cutZones = [];
+        this.splitMarkers = [];
         this.waveformPeaks = [];
         $('studio-offset-badge').textContent = '0.0s';
 
@@ -1012,6 +1015,7 @@
         inPoint: this.inPoint,
         outPoint: this.outPoint,
         cutZones: this.cutZones,
+        splitMarkers: this.splitMarkers || [],
       });
     }
 

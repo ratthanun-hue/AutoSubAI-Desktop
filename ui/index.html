@@ -15,7 +15,7 @@
         <div>
           <div class="brand-title">
             AutoSubAI Desktop
-            <span class="badge-beta">v1.1.1 Local+Cloud</span>
+            <span class="badge-beta">v1.2.0 Pro Split+Merge</span>
           </div>
           <div class="brand-sub" data-i18n="brandSub">Local &amp; Cloud Drama Subtitling, Style Inspector &amp; Video Finishing</div>
         </div>
@@ -135,6 +135,7 @@
             </div>
             <div class="projects-controls">
               <input id="local-search-input" type="text" data-i18n-ph="localSearchPh" placeholder="🔍 ค้นหา Local Project..." />
+              <button id="local-merge-btn" type="button" class="btn btn-secondary btn-sm" data-i18n="btnMergeVideos">🔗 รวมไฟล์วิดีโอ</button>
               <button id="local-add-media-btn" type="button" class="btn btn-primary btn-sm" data-i18n="btnAddLocalMedia">➕ เพิ่มไฟล์วิดีโอ/เสียง (Local)</button>
             </div>
           </div>
@@ -632,9 +633,52 @@
                   <button id="studio-translate-btn" type="button" class="btn btn-primary btn-sm" style="width:100%; margin-top:8px;" data-i18n="btnTranslateNow">✨ แปลซับ AI ทันที</button>
                 </div>
 
-                <!-- Sub-Tab 5: CUT / RIPPLE SYNC & 1-CLICK 9:16 VIRAL SHORTS -->
+                <!-- Sub-Tab 5: PRO SPLIT / MERGE / CUT RIPPLE & 9:16 SHORTS -->
                 <div id="insp-pane-cutshorts" class="insp-pane hidden">
-                  <div id="cut-status-box" class="summary-box" style="margin-bottom:8px;">
+                  <!-- Pro Video + Subtitle Splitter -->
+                  <div class="pro-split-box">
+                    <div class="pro-split-head">
+                      <strong data-i18n="splitTitle">🔪 แยกไฟล์มืออาชีพ (Split Video + .SRT)</strong>
+                      <span id="split-parts-badge" class="muted">ยังไม่ได้วางเส้นตัด (กดปุ่ม 🔪 หรือกดคีย์ B)</span>
+                    </div>
+                    <div class="pro-split-row">
+                      <button id="btn-add-split-marker" type="button" class="btn btn-primary btn-xs" data-i18n="btnAddSplitMarker">🔪 วางเส้นตัดที่นี่ [B]</button>
+                      <button id="btn-clear-split-markers" type="button" class="btn btn-ghost btn-xs">🧹 ล้างเส้นตัด</button>
+                      <label class="toggle-check" style="font-size:11px;">
+                        <input id="split-smart-snap" type="checkbox" checked />
+                        <span>Smart Snap (ไม่ตัดขาดกลางประโยค)</span>
+                      </label>
+                    </div>
+                    <div class="pro-split-row">
+                      <span class="muted" style="font-size:11px;">แบ่งอัตโนมัติ:</span>
+                      <input id="split-every-mins" type="number" min="0.5" max="120" step="0.5" value="3" style="width:52px;" />
+                      <button id="btn-auto-split-mins" type="button" class="btn btn-secondary btn-xs">⏱️ ทุก X นาที</button>
+                      <input id="split-equal-count" type="number" min="2" max="20" step="1" value="3" style="width:46px;" />
+                      <button id="btn-auto-split-equal" type="button" class="btn btn-secondary btn-xs">📐 แบ่งเท่ากัน N ตอน</button>
+                    </div>
+                    <div id="split-markers-list" class="split-markers-list"></div>
+                    <div class="pro-split-row" style="margin-top:6px;">
+                      <select id="split-mode-select" class="mini-select" style="flex:1;">
+                        <option value="lossless" selected>⚡ Fast Lossless Split (Stream Copy 1–3 วิ)</option>
+                        <option value="precision">🎯 Frame-Accurate Split (ตัดเป๊ะระดับเฟรม)</option>
+                        <option value="precision_hardsub">🔥 Precision Split + ฝังซับ Hardsub ทุกตอน</option>
+                      </select>
+                      <label class="toggle-check" style="font-size:11px;">
+                        <input id="split-add-local" type="checkbox" checked />
+                        <span>เพิ่มลง Local Workspace</span>
+                      </label>
+                      <button id="btn-run-split" type="button" class="btn btn-accent btn-xs" data-i18n="btnRunSplit">✂️ แยกไฟล์ทั้งหมด</button>
+                    </div>
+                    <div class="demux-row">
+                      <span class="muted" style="font-size:11px;">แยกแทร็ก &amp; รวมไฟล์:</span>
+                      <button id="btn-demux-mp3" type="button" class="btn btn-ghost btn-xs">🎵 แยกเสียง MP3</button>
+                      <button id="btn-demux-wav" type="button" class="btn btn-ghost btn-xs">🎙️ แยก WAV 16k</button>
+                      <button id="btn-demux-mute" type="button" class="btn btn-ghost btn-xs">🔇 วิดีโอไร้เสียง</button>
+                      <button id="studio-open-merge-btn" type="button" class="btn btn-secondary btn-xs" data-i18n="btnMergeVideos">🔗 รวมไฟล์วิดีโอ</button>
+                    </div>
+                  </div>
+
+                  <div id="cut-status-box" class="summary-box" style="margin-top:8px; margin-bottom:8px;">
                     In: <strong>00:00</strong> • Out: <strong>End</strong> • Cut-Out Zones: <strong>0</strong>
                   </div>
                   <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
@@ -830,6 +874,61 @@
       </div>
     </div>
 
+    <!-- MODAL: Pro Multi-Clip Video & Subtitle Merger -->
+    <div id="modal-merge-clips" class="modal-backdrop hidden">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-head">
+          <h3 data-i18n="modalMergeTitle">🔗 รวมไฟล์วิดีโอ + ต่อซับไตเติลอัตโนมัติ (Pro Merger)</h3>
+          <button type="button" class="btn-icon" data-close-modal="modal-merge-clips">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="pro-split-row" style="margin-bottom:8px;">
+            <button id="merge-pick-files-btn" type="button" class="btn btn-primary btn-xs">➕ เลือกไฟล์จากเครื่อง (หลายไฟล์)</button>
+            <select id="merge-local-picker" class="mini-select" style="flex:1;"></select>
+            <button id="merge-add-local-btn" type="button" class="btn btn-secondary btn-xs">➕ เพิ่มจาก Local</button>
+            <button id="merge-clear-btn" type="button" class="btn btn-ghost btn-xs">🧹 ล้างรายการ</button>
+          </div>
+
+          <div id="merge-clips-list" class="merge-clips-list"></div>
+          <div id="merge-summary-box" class="summary-box" style="margin-top:8px;"></div>
+
+          <div class="insp-grid" style="margin-top:10px;">
+            <div class="insp-field">
+              <label for="merge-mode-select">โหมดการรวมไฟล์</label>
+              <select id="merge-mode-select">
+                <option value="lossless" selected>⚡ Fast Lossless Merge (Stream Copy 2–5 วิ — สเปกเดียวกัน)</option>
+                <option value="conform">🎬 Smart Auto-Conform (รวมข้ามฟอร์แมต/ต่างขนาด + Transition)</option>
+              </select>
+            </div>
+            <div class="insp-field" id="merge-conform-opts">
+              <label>ความละเอียด &amp; รอยต่อ (Auto-Conform)</label>
+              <div class="color-row">
+                <select id="merge-res-select" style="flex:1;">
+                  <option value="original" selected>เท่าคลิปแรก (Original)</option>
+                  <option value="1080p">Full HD 1080p (16:9)</option>
+                  <option value="720p">HD 720p (16:9)</option>
+                  <option value="916">Vertical 9:16 (TikTok/Reels)</option>
+                </select>
+                <select id="merge-trans-select" style="flex:1;">
+                  <option value="none" selected>ไม่มีรอยต่อ (Hard Cut)</option>
+                  <option value="fade">🌑 Fade Transition (0.35s)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <label class="toggle-check" style="margin-top:8px;">
+            <input id="merge-open-studio" type="checkbox" checked />
+            <span>เปิดไฟล์ที่รวมแล้วใน Subtitle Studio + เพิ่มลง Local Workspace ทันที</span>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost btn-sm" data-close-modal="modal-merge-clips" data-i18n="btnCancel">ยกเลิก</button>
+          <button id="merge-run-btn" type="button" class="btn btn-primary btn-sm" data-i18n="btnStartMerge">🔗 เริ่มรวมไฟล์วิดีโอ + ซับ</button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast-root" class="toast-root" aria-live="polite"></div>
   </div>
 
@@ -838,6 +937,7 @@
   <script src="js/glossary.js"></script>
   <script src="js/local_projects.js"></script>
   <script src="js/studio.js"></script>
+  <script src="js/split_merge.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

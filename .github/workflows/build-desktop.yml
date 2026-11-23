@@ -115,25 +115,26 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.1.1-beta Release
+      - name: Create or update desktop-v1.2.0-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.1.1-beta
-          name: "AutoSubAI Desktop Studio v1.1.1 Beta — Dedicated AutoSubAI-Desktop Repository & Smart Auto-Updater"
+          tag_name: desktop-v1.2.0-beta
+          name: "AutoSubAI Desktop Studio v1.2.0 Beta — Pro Split, Demux & Multi-Clip Video+Subtitle Merger"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Studio (Tauri v2 — v1.1.1 Beta)
+            ## AutoSubAI Native Desktop Studio (Tauri v2 — v1.2.0 Beta)
 
             ### Downloads (All-in-One with Built-in FFmpeg & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.1.1_x64-setup.exe` (or `AutoSubAI_1.1.1_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.1.1_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.1.1_x64.dmg`
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.2.0_x64-setup.exe` (or `AutoSubAI_1.2.0_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.2.0_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.2.0_x64.dmg`
 
-            ### Highlights
-            - 💻 **Local Workspace Project (100% Local & Free)**: Edit local videos and `.SRT`/`.VTT` subtitles offline with zero login, built-in FFmpeg 16:9 thumbnails, Style Inspector, Karaoke, Delogo Blur, Watermark, Intro/Outro, Audio Waveform, Trim/Multi-Cut + Ripple Sync, 9:16 Viral Shorts, and Hardsub/Softsub MP4 export
-            - ☁️ **Cloud Workspace Project + Smart Cloud AI**: Sync with [thaiautosub.com](https://www.thaiautosub.com), one-click Google ID sign-in, PromptPay Top-Up redirect, and ฿10 free-trial credit (up to Plan 2 LipSync Pro™)
-            - ⬆️ **Dedicated Auto-Updater**: Now powered directly by `ratthanun-hue/AutoSubAI-Desktop` Releases for seamless 1-click updates
+            ### What's New in v1.2.0 Beta (Phase 1: Pro Video & Subtitle Editing)
+            - 🔪 **Pro Video + Subtitle Splitter**: Place unlimited **Razor Split Markers (`[B]`)** visually on the Audio Waveform, or **Auto-Split** by minutes / equal parts with **Smart Subtitle Snap** (never slices mid-sentence!). Exports `Part_01..N.mp4` + offset-reset `.SRT` subtitles in **Fast Lossless Stream Copy (1–3s)** or **Frame-Accurate / Hardsub** mode and optionally adds parts directly into Local Workspace!
+            - 🎵 **1-Click Demux Track Extractor**: Extract `.MP3`, `16kHz .WAV`, or silent mute `.MP4` locally in 1–2 seconds
+            - 🔗 **Pro Multi-Clip Video & Subtitle Merger**: Combine unlimited clips from disk or Local Workspace with drag/reorder, **Fast Lossless Stream Copy (2–5s)** or **Smart Auto-Conform** (auto-matches mixed MP4/MKV/MOV resolutions + optional **Fade Transition**), **automatic millisecond-accurate `.SRT` subtitle stitching**, and 1-click launch into Subtitle Studio!
+            - ⬆️ **Auto-Update**: Existing users on `v1.1.1` will automatically see **`⬆️ Update v1.2.0`** in the top bar!
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

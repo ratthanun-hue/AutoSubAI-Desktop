@@ -489,3 +489,108 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
   .studio-split { grid-template-columns: 1fr; }
   .insp-grid { grid-template-columns: 1fr; }
 }
+
+/* === v1.2.0 Pro Split & Multi-Clip Merge Studio === */
+.pro-split-box {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.pro-split-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.pro-split-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.demux-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+.split-markers-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.split-marker-chip {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 999px;
+  overflow: hidden;
+  font-size: 11px;
+}
+.split-marker-seek {
+  background: transparent;
+  border: none;
+  color: #fde68a;
+  padding: 2px 7px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+}
+.split-marker-seek:hover {
+  background: rgba(251, 191, 36, 0.22);
+}
+.split-marker-del {
+  background: transparent;
+  border: none;
+  border-left: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fca5a5;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.merge-clips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.merge-clip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.merge-clip-info {
+  flex: 1;
+  min-width: 0;
+}
+.merge-clip-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.merge-clip-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.modal-card-wide {
+  max-width: 660px;
+  width: 94vw;
+}

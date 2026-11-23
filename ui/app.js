@@ -185,6 +185,7 @@
   }
 
   let localWorkspace = null;
+  let splitMerge = null;
 
   // Instantiate Modular Native Subtitle Studio
   const studio = new window.DesktopSubtitleStudio({
@@ -197,6 +198,9 @@
     pickLocalVideoForProject,
     updateLocalProjectSegments: (id, segs, subPath) => {
       if (localWorkspace) localWorkspace.updateSegments(id, segs, subPath);
+    },
+    onProjectChanged: () => {
+      if (splitMerge) splitMerge.resetSplitMarkers();
     },
   });
 
@@ -214,6 +218,20 @@
     openTopupPage,
     openLocalInStudio: (localProj) => studio.openLocalProject(localProj),
   });
+
+  // Instantiate Phase 1 Pro Split, Demux & Multi-Clip Merge Studio
+  splitMerge = new window.DesktopSplitMergeManager(
+    {
+      state,
+      getTauri,
+      invokeCmd,
+      showToast,
+      getFileName,
+      pickLocalVideoForProject,
+    },
+    studio,
+    localWorkspace
+  );
 
   // --- Built-in Auto-Updater ---
   async function checkAppUpdateSilent() {
@@ -932,6 +950,7 @@
 
     localWorkspace.bindEvents();
     studio.bindEvents();
+    if (splitMerge) splitMerge.bindEvents();
   }
 
   window.addEventListener('DOMContentLoaded', async () => {

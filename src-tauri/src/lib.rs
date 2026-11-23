@@ -1155,6 +1155,28 @@ async fn download_and_launch_update(
     Ok(dest_str)
 }
 
+#[tauri::command]
+async fn split_media_parts(
+    app: tauri::AppHandle,
+    req: ffmpeg_engine::SplitMediaRequest,
+) -> Result<ffmpeg_engine::SplitMediaResult, String> {
+    ffmpeg_engine::split_media_parts(&app, req).await
+}
+
+#[tauri::command]
+async fn demux_extract_track(
+    req: ffmpeg_engine::DemuxExtractRequest,
+) -> Result<ffmpeg_engine::HardsubResult, String> {
+    ffmpeg_engine::demux_extract_track(req).await
+}
+
+#[tauri::command]
+async fn merge_media_clips(
+    req: ffmpeg_engine::MergeMediaRequest,
+) -> Result<ffmpeg_engine::MergeMediaResult, String> {
+    ffmpeg_engine::merge_media_clips(req).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1178,6 +1200,9 @@ pub fn run() {
             render_trimmed_cut_video,
             render_viral_shorts_916,
             generate_local_thumbnail,
+            split_media_parts,
+            demux_extract_track,
+            merge_media_clips,
             api_login,
             api_google_browser_login,
             api_get_profile,

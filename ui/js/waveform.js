@@ -18,6 +18,7 @@
       this.inPoint = null;
       this.outPoint = null;
       this.cutZones = []; // [{ start, end }]
+      this.splitMarkers = []; // [sec, ...]
 
       // Drag state
       this.dragMode = null; // 'start' | 'end' | 'move' | 'scrub'
@@ -29,7 +30,7 @@
       this._bindEvents();
     }
 
-    setData({ peaks, duration, segments, activeIdx, inPoint, outPoint, cutZones }) {
+    setData({ peaks, duration, segments, activeIdx, inPoint, outPoint, cutZones, splitMarkers }) {
       if (peaks !== undefined) this.peaks = peaks || [];
       if (duration !== undefined && duration > 0) this.duration = duration;
       if (segments !== undefined) this.segments = segments || [];
@@ -37,6 +38,7 @@
       if (inPoint !== undefined) this.inPoint = inPoint;
       if (outPoint !== undefined) this.outPoint = outPoint;
       if (cutZones !== undefined) this.cutZones = cutZones || [];
+      if (splitMarkers !== undefined) this.splitMarkers = splitMarkers || [];
       this.draw();
     }
 
@@ -250,6 +252,24 @@
           ctx.fillText(seg.text || `#${i + 1}`, x1 + 4, cueTop + cueH - 9);
           ctx.restore();
         }
+      }
+
+      // Razor Split Markers (amber dashed vertical cut lines)
+      if (Array.isArray(this.splitMarkers) && this.splitMarkers.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        for (const mt of this.splitMarkers) {
+          const mx = this._timeToX(mt, w);
+          ctx.beginPath();
+          ctx.moveTo(mx, 0);
+          ctx.lineTo(mx, h);
+          ctx.stroke();
+          ctx.fillStyle = '#fbbf24';
+          ctx.fillRect(mx - 4, 0, 8, 9);
+        }
+        ctx.restore();
       }
 
       // Playhead
