@@ -15,15 +15,16 @@
         <div>
           <div class="brand-title">
             AutoSubAI Desktop
-            <span class="badge-beta">v1.5.0 Pro NLE Studio</span>
+            <span class="badge-beta">v1.6.0 Pro Studio</span>
           </div>
           <div class="brand-sub" data-i18n="brandSub">Local &amp; Cloud Drama Subtitling, Style Inspector &amp; Video Finishing</div>
         </div>
       </div>
 
-      <!-- Primary 4-Tab Navigation -->
+      <!-- Primary 5-Tab Navigation -->
       <nav class="main-tabs" role="tablist">
         <button id="tab-btn-local" class="main-tab active" data-tab="local" role="tab" data-i18n="tabLocal">💻 Local Workspace</button>
+        <button id="tab-btn-meeting" class="main-tab" data-tab="meeting" role="tab">📝 งานประชุม (เลขา)</button>
         <button id="tab-btn-projects" class="main-tab" data-tab="projects" role="tab" data-i18n="tabProjects">☁️ Cloud Workspace</button>
         <button id="tab-btn-batch" class="main-tab" data-tab="batch" role="tab" data-i18n="tabBatch">⚡ Batch &amp; Cloud AI</button>
         <button id="tab-btn-studio" class="main-tab" data-tab="studio" role="tab" data-i18n="tabStudio">🎬 Subtitle Studio</button>
@@ -962,8 +963,184 @@
             </div>
           </section>
         </div>
+
+        <!-- VIEW 5: SECRETARY MEETING MINUTES WORKSPACE (v1.6.0 — 3-Step Zero-Jargon Mode) -->
+        <div id="view-meeting" class="tab-view hidden">
+          <div class="mt-shell">
+            <!-- 3-Step Visual Guide Banner -->
+            <div class="mt-steps-banner">
+              <div class="mt-step-pill">
+                <div class="mt-step-num">1</div>
+                <div>
+                  <div style="font-weight:700; font-size:13px;">เพิ่มไฟล์เสียง หรือ อัดเสียงประชุมสด</div>
+                  <div class="muted" style="font-size:11.5px;">รองรับไฟล์อัดเสียงมือถือ (.m4a/.mp3) และ Zoom/Teams (.mp4)</div>
+                </div>
+              </div>
+              <div class="mt-step-pill">
+                <div class="mt-step-num">2</div>
+                <div>
+                  <div style="font-weight:700; font-size:13px;">กดถอดเสียง + สรุปรายงานอัตโนมัติ</div>
+                  <div class="muted" style="font-size:11.5px;">หน้าจอเรียบง่ายเหมือน Word คลิกข้อความเพื่อฟังเสียงทวนได้ทันที</div>
+                </div>
+              </div>
+              <div class="mt-step-pill">
+                <div class="mt-step-num">3</div>
+                <div>
+                  <div style="font-weight:700; font-size:13px;">ส่งออก Word (.DOCX) หรือส่ง LINE</div>
+                  <div class="muted" style="font-size:11.5px;">จัดหน้ามาตรฐานฟอนต์ Sarabun พร้อมพิมพ์ส่งผู้บริหารใน 1 คลิก</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- STEP 1: AUDIO INPUT & 1-CLICK TRANSCRIBE -->
+            <section class="card">
+              <div class="card-header" style="margin-bottom:10px;">
+                <div>
+                  <h2 style="font-size:15px;">📝 ขั้นที่ 1: นำเข้าไฟล์เสียง หรือ อัดเสียงประชุมสด</h2>
+                  <p class="muted" style="font-size:12px;">โหมดสำหรับเลขานุการและทีมออฟฟิศ — ใช้งานง่าย ไม่ต้องตั้งค่าซับซ้อน</p>
+                </div>
+                <button id="mt-clear-btn" type="button" class="btn btn-ghost btn-xs">🆕 เริ่มรายงานฉบับใหม่</button>
+              </div>
+
+              <div class="mt-ingest-grid">
+                <button id="mt-pick-audio-btn" type="button" class="btn btn-primary mt-big-btn">📂 เลือกไฟล์เสียง / Zoom</button>
+                <button id="mt-record-btn" type="button" class="btn vo-rec-btn mt-big-btn">🔴 อัดเสียงประชุมสดหน้าเครื่อง</button>
+                <button id="mt-import-text-btn" type="button" class="btn btn-secondary btn-sm">📄 นำเข้าข้อความเดิม (.SRT/.TXT)</button>
+
+                <div style="margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <select id="mt-lang-select" class="mini-select" title="ภาษาที่ใช้ในการประชุม">
+                    <option value="th" selected>🇹🇭 ภาษาไทย</option>
+                    <option value="auto">🌐 อัตโนมัติ (ไทย+อังกฤษ)</option>
+                    <option value="en">🇬🇧 English</option>
+                  </select>
+                  <select id="mt-plan-select" class="mini-select" title="ระดับความแม่นยำ">
+                    <option value="plan-1">⚡ เร็วประหยัด (฿0.05/น.)</option>
+                    <option value="plan-2" selected>🎯 แม่นยำมาตรฐาน (฿0.10/น. — แนะนำ)</option>
+                    <option value="plan-3">👑 ตรวจทานระดับเลขา (฿0.195/น.)</option>
+                  </select>
+                  <button id="mt-transcribe-btn" type="button" class="btn btn-accent mt-big-btn" disabled>
+                    ✨ ถอดเสียงประชุม + สรุปรายงานอัตโนมัติ
+                  </button>
+                </div>
+              </div>
+
+              <div class="vo-vu-wrap" style="margin-top:8px;" title="ระดับเสียงไมโครโฟนขณะอัดประชุมสด">
+                <div id="mt-vu-fill" class="vo-vu-fill"></div>
+              </div>
+              <div id="mt-file-status" class="mt-file-status"></div>
+              <div id="mt-progress-box" class="hidden" style="margin-top:8px;"></div>
+            </section>
+
+            <!-- STEP 3 QUICK EXPORT BAR (Always easy to reach!) -->
+            <div class="mt-export-bar">
+              <div>
+                <strong style="font-size:13.5px;">📤 ขั้นที่ 3: ส่งออกรายงานการประชุมพร้อมส่งหัวหน้า (1 คลิก)</strong>
+                <div class="muted" style="font-size:11.5px;">ระบบบันทึกฉบับร่างให้อัตโนมัติทุกตัวอักษร — กดส่งออกได้ทันทีแม้ไม่มีอินเทอร์เน็ต</div>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button id="mt-export-docx-btn" type="button" class="btn btn-primary mt-big-btn" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);">
+                  📘 บันทึกเป็น Word (.DOCX)
+                </button>
+                <button id="mt-copy-line-btn" type="button" class="btn btn-accent mt-big-btn" style="background:linear-gradient(135deg,#16a34a,#15803d);">
+                  📋 คัดลอกสรุปส่ง LINE
+                </button>
+                <button id="mt-print-pdf-btn" type="button" class="btn btn-secondary btn-sm">🖨️ พิมพ์ / บันทึก PDF</button>
+                <button id="mt-export-txt-btn" type="button" class="btn btn-ghost btn-sm">💾 บันทึก .TXT</button>
+              </div>
+            </div>
+
+            <!-- STEP 2: 2-COLUMN WORD-STYLE REPORT & TRANSCRIPT -->
+            <div class="mt-doc-grid">
+              <!-- LEFT: Meeting Metadata + Structured Minutes -->
+              <section class="card" style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <strong style="font-size:14px;">📋 หัวรายงาน &amp; สรุปการประชุม</strong>
+                  <button id="mt-summarize-btn" type="button" class="btn btn-secondary btn-xs">✨ สรุปรายงานการประชุมอัตโนมัติ</button>
+                </div>
+
+                <div class="mt-meta-grid">
+                  <div class="mt-field full">
+                    <label for="mt-title">หัวข้อการประชุม</label>
+                    <input id="mt-title" type="text" placeholder="เช่น ประชุมประจำเดือนฝ่ายบริหาร ครั้งที่ 11/2569" />
+                  </div>
+                  <div class="mt-field">
+                    <label for="mt-date">วันที่ / เวลา</label>
+                    <input id="mt-date" type="text" placeholder="24 พฤศจิกายน 2569" />
+                  </div>
+                  <div class="mt-field">
+                    <label for="mt-location">สถานที่ / ช่องทาง</label>
+                    <input id="mt-location" type="text" placeholder="ห้องประชุม 1 / Zoom" />
+                  </div>
+                  <div class="mt-field full">
+                    <label for="mt-attendees">ผู้เข้าร่วมประชุม</label>
+                    <input id="mt-attendees" type="text" placeholder="เช่น ผอ.สมชาย, คุณวิภา, ฝ่ายบัญชี, ฝ่ายการตลาด" />
+                  </div>
+                  <div class="mt-field full">
+                    <label for="mt-secretary">ผู้จดรายงานการประชุม</label>
+                    <input id="mt-secretary" type="text" placeholder="ชื่อ-นามสกุล เลขานุการ" />
+                  </div>
+                </div>
+
+                <div class="mt-field">
+                  <label for="mt-summary">📌 1. สรุปสาระสำคัญของการประชุม</label>
+                  <textarea id="mt-summary" rows="4" placeholder="กดปุ่ม ✨ สรุปรายงานการประชุมอัตโนมัติ หรือพิมพ์สรุปประเด็นสำคัญที่นี่..."></textarea>
+                </div>
+                <div class="mt-field">
+                  <label for="mt-decisions">✅ 2. มติที่ประชุม / ข้อตกลงสำคัญ</label>
+                  <textarea id="mt-decisions" rows="3" placeholder="รายการมติที่ประชุมหรือเรื่องที่อนุมัติ..."></textarea>
+                </div>
+                <div class="mt-field">
+                  <label for="mt-actions">📝 3. รายการงานมอบหมายและติดตามผล (Action Items)</label>
+                  <textarea id="mt-actions" rows="3" placeholder="ระบุงานที่ต้องทำ / ผู้รับผิดชอบ / กำหนดส่ง..."></textarea>
+                </div>
+              </section>
+
+              <!-- RIGHT: Simple Audio Playback + Speaker Tagger + Clean Transcript -->
+              <section class="card" style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <strong style="font-size:14px;">💬 4. บทถอดเสียงการประชุม (คลิกเวลาเพื่อฟังเสียงทวน)</strong>
+                  <span id="mt-row-count" class="mono-tag">0 ย่อหน้า</span>
+                </div>
+
+                <!-- Simple Audio Bar -->
+                <div class="mt-audio-bar">
+                  <audio id="mt-audio-player" controls preload="metadata"></audio>
+                  <div style="display:flex; gap:4px;">
+                    <button type="button" class="chip-btn" data-mt-speed="0.75">0.75x</button>
+                    <button type="button" class="chip-btn active" data-mt-speed="1">1x</button>
+                    <button type="button" class="chip-btn" data-mt-speed="1.25">1.25x</button>
+                    <button type="button" class="chip-btn" data-mt-speed="1.5">1.5x</button>
+                  </div>
+                </div>
+
+                <!-- 1-Click Speaker Tag Palette -->
+                <div class="mt-speaker-bar">
+                  <span class="muted" style="font-size:11.5px; font-weight:700;">👤 แปะชื่อผู้พูด:</span>
+                  <div id="mt-speaker-chips" style="display:flex; gap:5px; flex-wrap:wrap;"></div>
+                  <div style="display:flex; gap:4px; margin-left:auto;">
+                    <input id="mt-new-speaker-input" type="text" placeholder="เพิ่มชื่อผู้พูด..." style="width:130px; padding:4px 8px; font-size:11.5px;" />
+                    <button id="mt-add-speaker-btn" type="button" class="btn btn-secondary btn-xs">➕ เพิ่มชื่อ</button>
+                  </div>
+                </div>
+
+                <!-- Simple Search & Fix Typos -->
+                <div class="find-replace-bar">
+                  <input id="mt-filter-input" type="text" placeholder="🔍 ค้นหาคำในบทประชุม..." />
+                  <input id="mt-find-input" type="text" placeholder="คำที่สะกดผิด..." />
+                  <input id="mt-replace-input" type="text" placeholder="แก้เป็น..." />
+                  <button id="mt-replace-btn" type="button" class="btn btn-ghost btn-xs">แทนที่ทั้งหมด</button>
+                </div>
+
+                <div id="mt-transcript-list" class="mt-transcript-list"></div>
+              </section>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
+
+    <!-- Hidden Official A4 Print/PDF Sheet -->
+    <div id="mt-print-sheet" class="mt-print-sheet"></div>
 
     <!-- MODAL: Export MP4 (Hardsub WYSIWYG / Softsub Stream-Copy) -->
     <div id="modal-export" class="modal-backdrop hidden">
@@ -1187,6 +1364,7 @@
   <script src="js/studio.js"></script>
   <script src="js/split_merge.js"></script>
   <script src="js/pro_editor.js"></script>
+  <script src="js/meeting.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

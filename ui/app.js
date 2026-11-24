@@ -157,7 +157,7 @@
     state.activeTab = tab;
     const ws = document.querySelector('.workspace');
     if (ws) ws.classList.toggle('studio-wide', tab === 'studio');
-    ['local', 'projects', 'batch', 'studio'].forEach((t) => {
+    ['local', 'meeting', 'projects', 'batch', 'studio'].forEach((t) => {
       const btn = $(`tab-btn-${t}`);
       const view = $(`view-${t}`);
       if (btn) btn.classList.toggle('active', t === tab);
@@ -168,6 +168,9 @@
     }
     if (tab === 'local' && localWorkspace) {
       localWorkspace.render();
+    }
+    if (tab === 'meeting' && meetingWorkspace) {
+      meetingWorkspace.syncInputsFromState();
     }
   }
 
@@ -187,6 +190,7 @@
   let localWorkspace = null;
   let splitMerge = null;
   let proEditor = null;
+  let meetingWorkspace = null;
 
   // Instantiate Modular Native Subtitle Studio
   const studio = new window.DesktopSubtitleStudio({
@@ -243,7 +247,7 @@
     localWorkspace
   );
 
-  // Instantiate Phase 2 & 3 Pro Video Editor (Color, Speed, BGM Ducking, B-Roll & Thumbnail Maker)
+  // Instantiate Phase 2 & 3 Pro Video Editor (Color, Speed, BGM Ducking, Voiceover, B-Roll & Thumbnail Maker)
   proEditor = new window.DesktopProEditor(
     {
       state,
@@ -256,6 +260,19 @@
     },
     studio
   );
+
+  // Instantiate Phase 2 Secretary Meeting Minutes Workspace (v1.6.0)
+  if (window.DesktopMeetingWorkspace) {
+    meetingWorkspace = new window.DesktopMeetingWorkspace({
+      state,
+      getTauri,
+      invokeCmd,
+      toAssetUrl,
+      showToast,
+      getFileName,
+      refreshProfile,
+    });
+  }
 
   // --- Built-in Auto-Updater ---
   async function checkAppUpdateSilent() {
@@ -1012,6 +1029,8 @@
         if (paths.length) {
           if (state.activeTab === 'local') {
             await localWorkspace.addMediaPaths(paths);
+          } else if (state.activeTab === 'meeting' && meetingWorkspace) {
+            await meetingWorkspace.loadAudioPath(paths[0]);
           } else {
             if (state.activeTab !== 'batch') switchTab('batch');
             await addFilePaths(paths);
@@ -1024,6 +1043,7 @@
     studio.bindEvents();
     if (splitMerge) splitMerge.bindEvents();
     if (proEditor) proEditor.bindEvents();
+    if (meetingWorkspace) meetingWorkspace.bindEvents();
   }
 
   window.addEventListener('DOMContentLoaded', async () => {

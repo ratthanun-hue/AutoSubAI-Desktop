@@ -115,26 +115,25 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.5.0-beta Release
+      - name: Create or update desktop-v1.6.0-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.5.0-beta
-          name: "AutoSubAI Desktop Pro Studio v1.5.0 Beta — 5-Track Resizable Timeline, Voiceover/Dubbing Studio & User Feedback"
+          tag_name: desktop-v1.6.0-beta
+          name: "AutoSubAI Desktop Pro Studio v1.6.0 Beta — Secretary Meeting Minutes Workspace, Native Word (.DOCX) Export, 5-Track Timeline & Voiceover"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.5.0 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.6.0 Beta)
 
             ### Downloads (All-in-One with Built-in FFmpeg 6.1.1 & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.5.0_x64-setup.exe` (or `AutoSubAI_1.5.0_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.5.0_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.5.0_x64.dmg`
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.6.0_x64-setup.exe` (or `AutoSubAI_1.6.0_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.6.0_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.6.0_x64.dmg`
 
-            ### What's New in v1.5.0 Beta (100% Local Processing — 0% Server Load)
-            - 📐 **Taller 5-Track Resizable Visual Timeline (`230px` default, draggable `160px–420px`)**: Drag the splitter bar or click **`⤢ ขยาย/ย่อ`** to expand/collapse the timeline (`T5 B-Roll`, `T4 Subtitles`, `T3 Voiceover`, `T2 Waveform/Cut`, `T1 BGM`).
-            - 🎙️ **Voiceover / Dubbing Studio (`🎙️ พากย์เสียง` 9th Inspector Tab)**: Record live microphone dubbing right at the Playhead (with live VU meter & video auto-play), import multiple `.MP3/.WAV/.M4A` voiceover clips, drag VO clips horizontally on track `T3`, and auto-duck original audio (`0%–100%`) in both live preview & FFmpeg MP4 export!
-            - 💬 **Built-in Feature Request & Feedback (`💬 แนะนำฟีเจอร์`)**: Rate and send ideas/bug reports straight from the Desktop top bar to the AutoSubAI engineering team.
-            - ⬆️ **Auto-Update**: Existing users on `v1.1.1`–`v1.4.2` will automatically see **`⬆️ Update v1.5.0`** in the top bar!
+            ### What's New in v1.6.0 Beta (All-in-One for Subtitlers, Secretaries & Creators!)
+            - 📝 **Secretary Meeting Minutes Workspace (`📝 งานประชุม (เลขา)`)**: Ultra-simple 3-step zero-jargon workspace — pick mobile/Zoom audio or record live meetings, 1-click AI transcription & structured minutes summary (Executive Summary, Key Decisions, Action Items), click any paragraph to listen back, 1-click speaker tagging, and export to **Native Microsoft Word (`.DOCX` TH Sarabun New)**, **Copy for LINE**, **Print / PDF**, or **`.TXT`**!
+            - 📐 **Includes Full v1.5.0 Upgrades**: 5-Track Resizable Visual Timeline (`230px` default, draggable `160px–420px`), Live Mic & Multi-Clip Voiceover/Dubbing Studio (`🎙️ พากย์เสียง`) with Auto-Ducking, and Built-in Feature Request & Feedback (`💬 แนะนำฟีเจอร์`).
+            - ⬆️ **Auto-Update**: Existing users will automatically see **`⬆️ Update v1.6.0`** in the top bar!
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

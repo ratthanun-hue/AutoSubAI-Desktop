@@ -1,4 +1,5 @@
 mod ass_builder;
+mod docx_builder;
 mod ffmpeg_engine;
 
 use ass_builder::{build_ass_document, CueItem, SubtitleStyleConfig};
@@ -1331,6 +1332,11 @@ async fn api_submit_feedback(
     Ok(body)
 }
 
+#[tauri::command]
+async fn export_meeting_docx(req: docx_builder::MeetingDocxRequest) -> Result<String, String> {
+    docx_builder::write_meeting_docx(&req).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1359,6 +1365,7 @@ pub fn run() {
             merge_media_clips,
             export_viral_thumbnail,
             save_voiceover_recording,
+            export_meeting_docx,
             api_submit_feedback,
             api_login,
             api_google_browser_login,
