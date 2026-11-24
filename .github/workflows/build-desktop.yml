@@ -115,26 +115,25 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.6.1-beta Release
+      - name: Create or update desktop-v1.6.2-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.6.1-beta
-          name: "AutoSubAI Desktop Pro Studio v1.6.1 Beta — Fixed Meeting Workspace, Studio Cloud AI CTA Button & Single-Row Topbar"
+          tag_name: desktop-v1.6.2-beta
+          name: "AutoSubAI Desktop Pro Studio v1.6.2 Beta — Fixed Meeting Recorder Transcription & Unified Pricing"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.6.1 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.6.2 Beta)
 
             ### Downloads (All-in-One with Built-in FFmpeg 6.1.1 & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.6.1_x64-setup.exe` (or `AutoSubAI_1.6.1_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.6.1_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.6.1_x64.dmg`
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.6.2_x64-setup.exe` (or `AutoSubAI_1.6.2_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.6.2_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.6.2_x64.dmg`
 
-            ### What's New & Fixed in v1.6.1 Beta
-            - ✅ **Fixed `📝 งานประชุม (เลขา)` Workspace Visibility**: Meeting Minutes Workspace (3-Step Zero-Jargon Mode + Live Mic Recorder + Native Microsoft Word `.DOCX` Exporter + Copy for LINE + Print/PDF) now displays immediately upon clicking the tab!
-            - ✨ **New `✨ สร้างซับ Cloud AI` Button inside Subtitle Studio**: Prominent 1-click Cloud AI subtitle generation button on the Studio top bar & empty cues card when editing Local Workspace videos.
-            - 🎯 **Compact Single-Row Topbar**: All 5 workspace tabs and action buttons stay crisp on a single row at `1440px–1680px`.
-            - ⬆️ **Auto-Update**: Existing `v1.6.0` users will immediately see **`⬆️ Update v1.6.1`** in the top bar!
+            ### What's New & Fixed in v1.6.2 Beta
+            - ✅ **Fixed Meeting Recorder & Audio Upload (`upload_and_transcribe` `filePath` & `probe_media_info` `filePath`)**: Live meeting recordings and imported Zoom/mobile audio files now upload, transcribe, and auto-summarize end-to-end without error!
+            - 💰 **Unified Pricing Alignment**: Updated Desktop cost estimator & plan labels to match `thaiautosub.com` (`Plan 1: ฿0.069/min`, `Plan 2: ฿0.125/min`, `Plan 3: ฿0.245/min`).
+            - ⬆️ **Auto-Update**: Existing `v1.6.1` users will immediately see **`⬆️ Update v1.6.2`** in the top bar!
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

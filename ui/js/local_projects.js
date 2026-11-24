@@ -2,7 +2,7 @@
   'use strict';
 
   const STORAGE_KEY = 'autosub_desktop_local_projects';
-  const PLAN_RATES = { 'plan-1': 0.05, 'plan-2': 0.10, 'plan-3': 0.195 };
+  const PLAN_RATES = { 'plan-1': 0.069, 'plan-2': 0.125, 'plan-3': 0.245 };
   const VIDEO_EXTS = new Set(['mp4', 'mkv', 'mov', 'avi', 'webm', 'ts', 'm4v', 'flv', 'wmv']);
   const AUDIO_EXTS = new Set(['mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'opus']);
   const ALL_MEDIA_EXTS = [...VIDEO_EXTS, ...AUDIO_EXTS];
@@ -332,7 +332,7 @@
       if (!proj) return;
 
       const plan = $('cloud-ai-plan').value;
-      const rate = PLAN_RATES[plan] ?? 0.10;
+      const rate = PLAN_RATES[plan] ?? 0.125;
       const dur = Math.max(10, Number(proj.durationSeconds) || 60);
       const estCost = Number(((dur / 60.0) * rate).toFixed(2));
       const prof = this.host.state.profile;
@@ -342,8 +342,8 @@
       const optP3 = $('cloud-ai-plan').querySelector('option[value="plan-3"]');
       if (optP3) {
         optP3.textContent = freeTrial
-          ? 'Plan 3 • Studio Masterpiece™ — ฿0.195/min (🔒 เติมเงินเพื่อปลดล็อก)'
-          : 'Plan 3 • Studio Masterpiece™ — ฿0.195/min';
+          ? 'Plan 3 • Studio Masterpiece™ — ฿0.245/min (🔒 เติมเงินเพื่อปลดล็อก)'
+          : 'Plan 3 • Studio Masterpiece™ — ฿0.245/min';
       }
 
       const infoBox = $('cloud-ai-status-box');
@@ -406,7 +406,7 @@
       if (!okProf) return;
       const prof = this.host.state.profile;
       const bal = Number(prof.credit_balance_thb ?? 0);
-      const estCost = Number(((Math.max(10, proj.durationSeconds || 60) / 60.0) * (PLAN_RATES[plan] ?? 0.10)).toFixed(2));
+      const estCost = Number(((Math.max(10, proj.durationSeconds || 60) / 60.0) * (PLAN_RATES[plan] ?? 0.125)).toFixed(2));
       if (this._isFreeTrialAccount() && plan === 'plan-3') return;
       if (bal < estCost || bal <= 0) return;
 

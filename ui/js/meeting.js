@@ -175,7 +175,7 @@
         const durStr = this.mediaDuration > 0 ? ` • ความยาว ${fmtTime(this.mediaDuration)}` : '';
         const estMin = Math.max(1, Math.ceil((this.mediaDuration || 60) / 60));
         const model = $('mt-plan-select')?.value || 'plan-2';
-        const rate = model === 'plan-1' ? 0.05 : (model === 'plan-3' ? 0.195 : 0.10);
+        const rate = model === 'plan-1' ? 0.069 : (model === 'plan-3' ? 0.245 : 0.125);
         const estCost = (estMin * rate).toFixed(2);
         box.innerHTML = `✅ <strong>ไฟล์พร้อมแล้ว:</strong> ${escapeHtml(this.mediaName || this.host.getFileName(this.mediaPath))}${durStr} <span class="mono-tag" style="margin-left:6px;">ประมาณ ฿${estCost}</span>`;
         if (btn) btn.disabled = this.transcribing;
@@ -251,7 +251,7 @@
       this.mediaName = this.host.getFileName(sel);
       this.mediaDuration = 0;
       try {
-        const info = await this.host.invokeCmd('probe_media_info', { videoPath: sel });
+        const info = await this.host.invokeCmd('probe_media_info', { filePath: sel });
         if (info && Number(info.duration_seconds) > 0) this.mediaDuration = Number(info.duration_seconds);
       } catch (_) {}
       if (!this.meta.title) {
@@ -468,13 +468,12 @@
 
         setProg('กำลังส่งเสียงขึ้น AutoSubAI Neural Engine...', 32);
         const up = await this.host.invokeCmd('upload_and_transcribe', {
+          filePath: tempAudio,
+          displayFilename: this.mediaName || 'meeting.wav',
           apiBase: this.host.state.apiBase,
           token: this.host.state.token,
-          audioPath: tempAudio,
-          displayFilename: this.mediaName || 'meeting.wav',
           model,
           language: lang,
-          responseFormat: 'verbose_json',
         });
 
         let result = up;
@@ -507,6 +506,12 @@
         let parsed = [];
         if (result.srt_content) {
           parsed = parseSrtOrText(result.srt_content);
+        } else if (Array.isArray(result.segments) && result.segments.length) {
+          parsed = result.segments.map((s) => ({
+            start: Number(s.start || 0),
+            speaker: '',
+            text: String(s.text || '').trim(),
+          })).filter((r) => r.text);
         } else if (Array.isArray(result.words) && result.words.length) {
           parsed = result.words.map((w) => ({
             start: Number(w.start || 0),
@@ -583,6 +588,7 @@
             const res = await this.host.invokeCmd('api_summarize_transcript', {
               apiBase: this.host.state.apiBase,
               token: this.host.state.token,
+              jobId: null,
               text: fullText.slice(0, 18000),
               language: 'th',
             });

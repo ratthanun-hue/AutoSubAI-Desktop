@@ -13,7 +13,7 @@
     localMap: 'autosub_desktop_local_media_map',
   };
 
-  const PLAN_RATES_PER_MIN = { 'plan-1': 0.05, 'plan-2': 0.10, 'plan-3': 0.195 };
+  const PLAN_RATES_PER_MIN = { 'plan-1': 0.069, 'plan-2': 0.125, 'plan-3': 0.245 };
   const VIDEO_EXTS = new Set(['mp4', 'mkv', 'mov', 'avi', 'webm', 'ts', 'm4v', 'flv', 'wmv']);
   const AUDIO_EXTS = new Set(['mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'opus']);
   const ALL_MEDIA_EXTS = [...VIDEO_EXTS, ...AUDIO_EXTS];
@@ -96,7 +96,7 @@
 
   function estimateCostThb(durationSeconds, planId) {
     if (!durationSeconds || durationSeconds <= 0) return null;
-    return (durationSeconds / 60.0) * (PLAN_RATES_PER_MIN[planId] ?? 0.10);
+    return (durationSeconds / 60.0) * (PLAN_RATES_PER_MIN[planId] ?? 0.125);
   }
 
   function getFileName(path) {
