@@ -1235,7 +1235,7 @@ async fn save_voiceover_recording(
         .map_err(|e| format!("บันทึกไฟล์เสียงดิบไม่สำเร็จ: {}", e))?;
 
     // Convert to clean 48kHz stereo PCM WAV using Built-in FFmpeg for universal playback & sync
-    let ffmpeg_info = ffmpeg_engine::check_ffmpeg().await;
+    let ffmpeg_info = check_ffmpeg_info().await;
     let final_path = if ffmpeg_info.available && !ffmpeg_info.path.is_empty() {
         let mut cmd = tokio::process::Command::new(&ffmpeg_info.path);
         #[cfg(target_os = "windows")]
@@ -1269,9 +1269,10 @@ async fn save_voiceover_recording(
     };
 
     let final_str = final_path.to_string_lossy().to_string();
-    let dur = ffmpeg_engine::probe_media_info(&final_str)
+    let dur = probe_media(&final_str)
         .await
-        .map(|m| m.duration_seconds)
+        .ok()
+        .and_then(|m| m.duration_seconds)
         .unwrap_or(0.0);
 
     Ok(json!({
