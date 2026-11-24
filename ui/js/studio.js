@@ -208,6 +208,11 @@
       $('studio-go-projects-btn').addEventListener('click', () => this.host.switchTab('local'));
       $('studio-back-btn').addEventListener('click', () => this.host.switchTab(this.sourceType === 'local' ? 'local' : 'projects'));
       $('studio-save-btn').addEventListener('click', () => this.save());
+      $('studio-cloud-ai-btn')?.addEventListener('click', () => {
+        if (this.sourceType === 'local' && this.host.openCloudAiForLocalProject) {
+          this.host.openCloudAiForLocalProject(this.projectId);
+        }
+      });
       $('studio-import-sub-btn').addEventListener('click', () => this.importLocalSubtitleFile());
       $('studio-export-srt-btn').addEventListener('click', () => this.exportSubtitle('srt'));
       $('studio-export-vtt-btn').addEventListener('click', () => this.exportSubtitle('vtt'));
@@ -1156,8 +1161,31 @@
     renderSegments() {
       const container = $('studio-segments-list');
       this.renderHeader();
+      const cloudBtn = $('studio-cloud-ai-btn');
+      if (cloudBtn) {
+        cloudBtn.classList.toggle('hidden', this.sourceType !== 'local');
+      }
       if (!this.segments.length) {
-        container.innerHTML = '<div class="empty-state">No subtitles yet — click ➕ Add Cue</div>';
+        if (this.sourceType === 'local') {
+          container.innerHTML = `
+            <div class="empty-state" style="padding:20px 12px; display:flex; flex-direction:column; align-items:center; gap:9px;">
+              <div style="font-size:24px;">✨</div>
+              <div style="font-weight:700; font-size:13px; color:#f1f5f9;">ยังไม่มีซับไตเติลในคลิปนี้</div>
+              <div class="muted" style="font-size:11.5px; line-height:1.45;">ให้ AutoSubAI ถอดเสียงสร้างซับภาษาไทย/ต่างประเทศอัตโนมัติ แม่นยำ 96%+</div>
+              <button type="button" id="studio-empty-cloud-ai-btn" class="btn btn-cloud-ai-cta btn-sm" style="width:100%; justify-content:center;">✨ สร้างซับ Cloud AI ทันที</button>
+              <div style="display:flex; gap:6px; width:100%;">
+                <button type="button" id="studio-empty-import-btn" class="btn btn-ghost btn-xs" style="flex:1; justify-content:center;">📄 +SRT/VTT</button>
+                <button type="button" id="studio-empty-add-btn" class="btn btn-ghost btn-xs" style="flex:1; justify-content:center;">➕ พิมพ์ซับเอง</button>
+              </div>
+            </div>`;
+          $('studio-empty-cloud-ai-btn')?.addEventListener('click', () => {
+            if (this.host.openCloudAiForLocalProject) this.host.openCloudAiForLocalProject(this.projectId);
+          });
+          $('studio-empty-import-btn')?.addEventListener('click', () => this.importLocalSubtitleFile());
+          $('studio-empty-add-btn')?.addEventListener('click', () => this.addCue());
+        } else {
+          container.innerHTML = '<div class="empty-state">No subtitles yet — click ➕ Add Cue</div>';
+        }
         return;
       }
 

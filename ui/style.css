@@ -916,6 +916,34 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
   background: linear-gradient(135deg, rgba(30, 58, 138, 0.26), rgba(6, 78, 59, 0.24));
   border: 1px solid rgba(99, 102, 241, 0.35);
 }
+.btn-cloud-ai-cta {
+  background: linear-gradient(135deg, #7c3aed, #2563eb 60%, #06b6d4);
+  color: #ffffff;
+  border: 1px solid rgba(167, 139, 250, 0.55);
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+}
+.btn-cloud-ai-cta:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+@media (max-width: 1720px) {
+  .brand-sub { display: none; }
+  .brand { gap: 6px; flex-shrink: 0; }
+  .brand-logo { width: 28px; height: 28px; font-size: 11.5px; border-radius: 8px; }
+  .brand-title { font-size: 12.5px; gap: 4px; }
+  .badge-beta { font-size: 9px; padding: 1px 5px; }
+  .topbar { padding: 6px 10px; gap: 6px; flex-wrap: nowrap; }
+  .main-tabs { gap: 2px; padding: 2px; flex-shrink: 0; }
+  .main-tab { padding: 4px 7px; font-size: 11px; }
+  .topbar-actions { gap: 4px; flex-wrap: nowrap; flex-shrink: 0; }
+  .topbar-actions .btn-sm, .topbar-actions .pill { padding: 3px 7px; font-size: 11px; white-space: nowrap; }
+  .lang-btn { padding: 3px 6px; font-size: 10.5px; }
+}
+@media (max-width: 1260px) {
+  .topbar { flex-wrap: wrap; }
+  .topbar-actions { flex-wrap: wrap; }
+}
 .mt-print-sheet { display: none; }
 @media print {
   body * { visibility: hidden !important; }

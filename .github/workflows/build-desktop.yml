@@ -115,25 +115,26 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.6.0-beta Release
+      - name: Create or update desktop-v1.6.1-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.6.0-beta
-          name: "AutoSubAI Desktop Pro Studio v1.6.0 Beta — Secretary Meeting Minutes Workspace, Native Word (.DOCX) Export, 5-Track Timeline & Voiceover"
+          tag_name: desktop-v1.6.1-beta
+          name: "AutoSubAI Desktop Pro Studio v1.6.1 Beta — Fixed Meeting Workspace, Studio Cloud AI CTA Button & Single-Row Topbar"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.6.0 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.6.1 Beta)
 
             ### Downloads (All-in-One with Built-in FFmpeg 6.1.1 & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.6.0_x64-setup.exe` (or `AutoSubAI_1.6.0_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.6.0_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.6.0_x64.dmg`
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.6.1_x64-setup.exe` (or `AutoSubAI_1.6.1_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.6.1_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.6.1_x64.dmg`
 
-            ### What's New in v1.6.0 Beta (All-in-One for Subtitlers, Secretaries & Creators!)
-            - 📝 **Secretary Meeting Minutes Workspace (`📝 งานประชุม (เลขา)`)**: Ultra-simple 3-step zero-jargon workspace — pick mobile/Zoom audio or record live meetings, 1-click AI transcription & structured minutes summary (Executive Summary, Key Decisions, Action Items), click any paragraph to listen back, 1-click speaker tagging, and export to **Native Microsoft Word (`.DOCX` TH Sarabun New)**, **Copy for LINE**, **Print / PDF**, or **`.TXT`**!
-            - 📐 **Includes Full v1.5.0 Upgrades**: 5-Track Resizable Visual Timeline (`230px` default, draggable `160px–420px`), Live Mic & Multi-Clip Voiceover/Dubbing Studio (`🎙️ พากย์เสียง`) with Auto-Ducking, and Built-in Feature Request & Feedback (`💬 แนะนำฟีเจอร์`).
-            - ⬆️ **Auto-Update**: Existing users will automatically see **`⬆️ Update v1.6.0`** in the top bar!
+            ### What's New & Fixed in v1.6.1 Beta
+            - ✅ **Fixed `📝 งานประชุม (เลขา)` Workspace Visibility**: Meeting Minutes Workspace (3-Step Zero-Jargon Mode + Live Mic Recorder + Native Microsoft Word `.DOCX` Exporter + Copy for LINE + Print/PDF) now displays immediately upon clicking the tab!
+            - ✨ **New `✨ สร้างซับ Cloud AI` Button inside Subtitle Studio**: Prominent 1-click Cloud AI subtitle generation button on the Studio top bar & empty cues card when editing Local Workspace videos.
+            - 🎯 **Compact Single-Row Topbar**: All 5 workspace tabs and action buttons stay crisp on a single row at `1440px–1680px`.
+            - ⬆️ **Auto-Update**: Existing `v1.6.0` users will immediately see **`⬆️ Update v1.6.1`** in the top bar!
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

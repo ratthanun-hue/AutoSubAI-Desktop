@@ -204,6 +204,9 @@
     updateLocalProjectSegments: (id, segs, subPath) => {
       if (localWorkspace) localWorkspace.updateSegments(id, segs, subPath);
     },
+    openCloudAiForLocalProject: (id) => {
+      if (localWorkspace) localWorkspace.openCloudAiModal(id);
+    },
     onProjectChanged: () => {
       if (splitMerge) splitMerge.resetSplitMarkers();
       if (proEditor) proEditor.resetForNewProject();
