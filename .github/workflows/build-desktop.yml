@@ -115,29 +115,26 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.4.2-beta Release
+      - name: Create or update desktop-v1.5.0-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.4.2-beta
-          name: "AutoSubAI Desktop Pro Studio v1.4.2 Beta — Built-in Visual User Guide (📖 คู่มือ) & Full-Bleed Pro NLE"
+          tag_name: desktop-v1.5.0-beta
+          name: "AutoSubAI Desktop Pro Studio v1.5.0 Beta — 5-Track Resizable Timeline, Voiceover/Dubbing Studio & User Feedback"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.4.2 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.5.0 Beta)
 
             ### Downloads (All-in-One with Built-in FFmpeg 6.1.1 & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.4.2_x64-setup.exe` (or `AutoSubAI_1.4.2_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.4.2_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.4.2_x64.dmg`
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.5.0_x64-setup.exe` (or `AutoSubAI_1.5.0_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.5.0_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.5.0_x64.dmg`
 
-            ### 📖 Visual User Guide (คู่มือการใช้งานพร้อมภาพประกอบ)
-            - Read online / Print PDF: **[https://www.thaiautosub.com/guide](https://www.thaiautosub.com/guide)**
-            - GitHub Docs: **[docs/USER_GUIDE.md](https://github.com/ratthanun-hue/AutoSubAI-Desktop/blob/main/docs/USER_GUIDE.md)**
-
-            ### What's New in v1.4.2 Beta
-            - 📖 **1-Click Built-in `📖 คู่มือ / 📖 Guide` Button**: Open the complete visual user manual with annotated screenshots & keyboard shortcuts directly from the top bar!
-            - 🖥️ **Includes Full v1.4.1 Full-Bleed 3-Pane NLE Workspace**: Compact Left Subtitle Editor, Wide Center Monitor, Right 8-Tab Inspector & Edge-to-Edge 4-Track Visual Timeline (with Timecode Ruler, `16x` Zoom & Razor Split `[B]`).
-            - ⬆️ **Auto-Update**: Existing users on `v1.1.1`–`v1.4.1` will automatically see **`⬆️ Update v1.4.2`** in the top bar!
+            ### What's New in v1.5.0 Beta (100% Local Processing — 0% Server Load)
+            - 📐 **Taller 5-Track Resizable Visual Timeline (`230px` default, draggable `160px–420px`)**: Drag the splitter bar or click **`⤢ ขยาย/ย่อ`** to expand/collapse the timeline (`T5 B-Roll`, `T4 Subtitles`, `T3 Voiceover`, `T2 Waveform/Cut`, `T1 BGM`).
+            - 🎙️ **Voiceover / Dubbing Studio (`🎙️ พากย์เสียง` 9th Inspector Tab)**: Record live microphone dubbing right at the Playhead (with live VU meter & video auto-play), import multiple `.MP3/.WAV/.M4A` voiceover clips, drag VO clips horizontally on track `T3`, and auto-duck original audio (`0%–100%`) in both live preview & FFmpeg MP4 export!
+            - 💬 **Built-in Feature Request & Feedback (`💬 แนะนำฟีเจอร์`)**: Rate and send ideas/bug reports straight from the Desktop top bar to the AutoSubAI engineering team.
+            - ⬆️ **Auto-Update**: Existing users on `v1.1.1`–`v1.4.2` will automatically see **`⬆️ Update v1.5.0`** in the top bar!
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
