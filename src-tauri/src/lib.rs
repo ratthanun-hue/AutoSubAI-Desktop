@@ -1185,6 +1185,151 @@ async fn export_viral_thumbnail(
     ffmpeg_engine::export_viral_thumbnail(&app, req).await
 }
 
+#[tauri::command]
+async fn save_voiceover_recording(
+    project_id: String,
+    filename: String,
+    bytes: Vec<u8>,
+) -> Result<Value, String> {
+    if bytes.is_empty() {
+        return Err("ไม่มีข้อมูลเสียงที่บันทึกได้".to_string());
+    }
+    let safe_proj: String = project_id
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(*c, '_' | '-'))
+        .take(48)
+        .collect();
+    let folder_name = if safe_proj.is_empty() {
+        "default".to_string()
+    } else {
+        safe_proj
+    };
+
+    let mut vo_dir = std::env::temp_dir();
+    vo_dir.push("autosubai_voiceovers");
+    vo_dir.push(&folder_name);
+    tokio::fs::create_dir_all(&vo_dir)
+        .await
+        .map_err(|e| format!("สร้างโฟลเดอร์เก็บเสียงพากย์ไม่สำเร็จ: {}", e))?;
+
+    let safe_stem: String = filename
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(*c, '_' | '-'))
+        .take(48)
+        .collect();
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let stem = if safe_stem.is_empty() {
+        format!("vo_{}", ts)
+    } else {
+        format!("{}_{}", safe_stem, ts)
+    };
+
+    let raw_path = vo_dir.join(format!("{}_raw.webm", stem));
+    let wav_path = vo_dir.join(format!("{}.wav", stem));
+
+    tokio::fs::write(&raw_path, &bytes)
+        .await
+        .map_err(|e| format!("บันทึกไฟล์เสียงดิบไม่สำเร็จ: {}", e))?;
+
+    // Convert to clean 48kHz stereo PCM WAV using Built-in FFmpeg for universal playback & sync
+    let ffmpeg_info = ffmpeg_engine::check_ffmpeg().await;
+    let final_path = if ffmpeg_info.available && !ffmpeg_info.path.is_empty() {
+        let mut cmd = tokio::process::Command::new(&ffmpeg_info.path);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000);
+        let status = cmd
+            .args([
+                "-y",
+                "-i",
+                &raw_path.to_string_lossy(),
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                "-c:a",
+                "pcm_s16le",
+                &wav_path.to_string_lossy(),
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await;
+
+        if matches!(status, Ok(s) if s.success()) && wav_path.is_file() {
+            let _ = tokio::fs::remove_file(&raw_path).await;
+            wav_path
+        } else {
+            raw_path
+        }
+    } else {
+        raw_path
+    };
+
+    let final_str = final_path.to_string_lossy().to_string();
+    let dur = ffmpeg_engine::probe_media_info(&final_str)
+        .await
+        .map(|m| m.duration_seconds)
+        .unwrap_or(0.0);
+
+    Ok(json!({
+        "path": final_str,
+        "duration": dur
+    }))
+}
+
+#[tauri::command]
+async fn api_submit_feedback(
+    api_base: String,
+    token: Option<String>,
+    category: String,
+    rating: i32,
+    message: String,
+    contact_email: Option<String>,
+) -> Result<Value, String> {
+    let base = api_base.trim_end_matches('/');
+    let url = format!("{}/v1/feedback", base);
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .user_agent("AutoSubAI-Desktop")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let payload = json!({
+        "category": category,
+        "rating": rating.clamp(1, 5),
+        "message": message,
+        "contact_email": contact_email.unwrap_or_default(),
+        "source": "desktop",
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "os_info": format!("{}/{}", std::env::consts::OS, std::env::consts::ARCH),
+    });
+
+    let mut req = client.post(&url).json(&payload);
+    if let Some(t) = token {
+        if !t.trim().is_empty() {
+            req = req.bearer_auth(t.trim());
+        }
+    }
+
+    let res = req
+        .send()
+        .await
+        .map_err(|e| format!("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ส่งข้อเสนอแนะได้: {}", e))?;
+    let status = res.status();
+    let body: Value = res.json().await.unwrap_or_else(|_| json!({}));
+    if !status.is_success() {
+        let detail = body
+            .get("detail")
+            .and_then(|v| v.as_str())
+            .unwrap_or("ส่งข้อเสนอแนะไม่สำเร็จ");
+        return Err(detail.to_string());
+    }
+    Ok(body)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1212,6 +1357,8 @@ pub fn run() {
             demux_extract_track,
             merge_media_clips,
             export_viral_thumbnail,
+            save_voiceover_recording,
+            api_submit_feedback,
             api_login,
             api_google_browser_login,
             api_get_profile,

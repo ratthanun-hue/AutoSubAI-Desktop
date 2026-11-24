@@ -262,7 +262,7 @@
         btn.addEventListener('click', () => this.setSafeZone(btn.dataset.sz));
       });
 
-      // Interactive Audio Waveform Canvas Timeline
+      // Interactive 5-Track Resizable Visual Timeline
       this.waveform = new window.DesktopWaveformTimeline(
         $('studio-waveform-canvas'),
         $('studio-waveform-wrap'),
@@ -276,8 +276,42 @@
               this.renderSegments();
             }
           },
+          onVoiceoverDragged: (voIdx, newStart, finished) => {
+            if (this.host.onVoiceoverDragged) this.host.onVoiceoverDragged(voIdx, newStart, finished);
+          },
         }
       );
+
+      // Draggable Timeline Height Resizer + 1-Click Expand Toggle (v1.5.0)
+      const resizer = $('timeline-resizer');
+      if (resizer && this.waveform) {
+        let resizing = false;
+        let startY = 0;
+        let startH = this.waveform.height;
+        resizer.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          resizing = true;
+          startY = e.clientY;
+          startH = this.waveform.height;
+          resizer.classList.add('dragging');
+        });
+        window.addEventListener('mousemove', (e) => {
+          if (!resizing) return;
+          const delta = startY - e.clientY;
+          this.waveform.setHeight(startH + delta, false);
+        });
+        window.addEventListener('mouseup', () => {
+          if (!resizing) return;
+          resizing = false;
+          resizer.classList.remove('dragging');
+          this.waveform.setHeight(this.waveform.height, true);
+        });
+      }
+      $('wf-expand-btn')?.addEventListener('click', () => {
+        if (!this.waveform) return;
+        const h = this.waveform.toggleExpand();
+        this.host.showToast(`📐 ปรับความสูงไทม์ไลน์เป็น ${h}px`, 'info');
+      });
 
       document.querySelectorAll('button[data-wf-zoom]').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -333,12 +367,12 @@
         }
       });
 
-      // 8-Tab Pro Inspector Switcher
+      // 9-Tab Pro Inspector Switcher
       document.querySelectorAll('.insp-tab').forEach((tab) => {
         tab.addEventListener('click', () => {
           const target = tab.dataset.inspTab;
           document.querySelectorAll('.insp-tab').forEach((t) => t.classList.toggle('active', t === tab));
-          ['style', 'delogo', 'watermark', 'bilingual', 'cutshorts', 'colorbgm', 'brollthumb', 'glossary'].forEach((k) => {
+          ['style', 'delogo', 'watermark', 'bilingual', 'cutshorts', 'colorbgm', 'voiceover', 'brollthumb', 'glossary'].forEach((k) => {
             const pane = $(`insp-pane-${k}`);
             if (pane) pane.classList.toggle('hidden', k !== target);
           });
@@ -1018,6 +1052,7 @@
         cutZones: this.cutZones,
         splitMarkers: this.splitMarkers || [],
         brollOverlays: proMeta.brollOverlays || [],
+        voiceoverClips: proMeta.voiceoverClips || [],
         bgmInfo: proMeta.bgmInfo || { enabled: false, name: '', auto_ducking: true },
         watermarkEnabled: !!(this.watermark && this.watermark.enabled && this.watermark.image_path),
       });
@@ -1503,9 +1538,13 @@
       const mode = modeEl ? modeEl.value : 'hardsub';
       $('export-res-wrap').classList.toggle('hidden', mode === 'softsub');
       const res = $('export-resolution').value;
+      const proCfgSummary = this.host.getProRenderConfig ? this.host.getProRenderConfig() : {};
+      const voCount = (proCfgSummary.voiceover && proCfgSummary.voiceover.enabled && Array.isArray(proCfgSummary.voiceover.clips))
+        ? proCfgSummary.voiceover.clips.length : 0;
       const lines = [
         `• Mode: <strong>${mode === 'softsub' ? 'Softsub MP4 (Stream Copy 1–2s)' : 'WYSIWYG Hardsub MP4 (GPU NVENC/VideoToolbox)'}</strong>`,
         `• Style: <strong>${escapeHtml(this.style.font_family)} ${this.style.font_size}px</strong>${this.style.karaoke_enabled ? ' + <strong>✨ Karaoke</strong>' : ''}${this.style.bilingual_enabled ? ' + <strong>Bilingual 2nd Line</strong>' : ''}`,
+        voCount > 0 ? `• Voiceover / Dubbing: <strong>🎙️ ${voCount} คลิป${proCfgSummary.voiceover.duck_original ? ' (Auto-Duck เสียงต้นฉบับ)' : ''}</strong>` : '',
         `• Delogo / Cover Bar: <strong>${this.delogo.enabled ? `${this.delogo.mode} (Y=${this.delogo.y_pct}%, H=${this.delogo.height_pct}%)` : 'Off'}</strong>`,
         `• Channel Watermark: <strong>${this.watermark.enabled && this.watermark.image_path ? escapeHtml(this.host.getFileName(this.watermark.image_path)) : 'Off'}</strong>`,
         (this.branding.intro_path || this.branding.outro_path) ? `• Intro / Outro Stitch: <strong>${this.branding.intro_path ? 'Intro ✅' : ''} ${this.branding.outro_path ? 'Outro ✅' : ''}</strong>` : '',
@@ -1556,6 +1595,7 @@
             color_speed: proCfg.color_speed,
             bgm: proCfg.bgm,
             broll_overlays: proCfg.broll_overlays,
+            voiceover: proCfg.voiceover,
           },
         });
         $('modal-export').classList.add('hidden');

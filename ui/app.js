@@ -206,6 +206,9 @@
     },
     getProRenderConfig: () => (proEditor ? proEditor.getRenderConfig() : {}),
     getProTimelineMeta: () => (proEditor ? proEditor.getTimelineMeta() : {}),
+    onVoiceoverDragged: (voIdx, newStart, commit) => {
+      if (proEditor && proEditor.updateVoiceoverStart) proEditor.updateVoiceoverStart(voIdx, newStart, commit);
+    },
     onTimeUpdateHook: (t, activeCueIdx) => {
       if (proEditor) proEditor.onTimeUpdate(t, activeCueIdx);
     },
@@ -902,6 +905,53 @@
       localStorage.removeItem(STORAGE_KEYS.token); renderAuthUI(); showToast('Signed out');
     });
     $('open-guide-btn')?.addEventListener('click', () => invokeCmd('open_cloud_studio', { url: `${state.apiBase}/guide`, token: null }).catch((e) => showToast(String(e), 'err')));
+
+    // Feedback / Feature Request Modal (v1.5.0)
+    let fbRating = 5;
+    const renderFbStars = (r) => {
+      fbRating = Math.max(1, Math.min(5, Number(r) || 5));
+      document.querySelectorAll('#fb-stars [data-fb-star]').forEach((el) => {
+        el.classList.toggle('off', Number(el.dataset.fbStar) > fbRating);
+      });
+    };
+    document.querySelectorAll('#fb-stars [data-fb-star]').forEach((el) => {
+      el.addEventListener('click', () => renderFbStars(el.dataset.fbStar));
+    });
+    $('open-feedback-btn')?.addEventListener('click', () => {
+      renderFbStars(5);
+      if ($('fb-email') && !$('fb-email').value && state.profile?.email) {
+        $('fb-email').value = state.profile.email;
+      }
+      $('modal-feedback')?.classList.remove('hidden');
+      setTimeout(() => $('fb-message')?.focus(), 60);
+    });
+    $('fb-submit-btn')?.addEventListener('click', async () => {
+      const msg = ($('fb-message')?.value || '').trim();
+      if (msg.length < 5) {
+        showToast('กรุณาระบุข้อเสนอแนะอย่างน้อย 5 ตัวอักษรครับ', 'err');
+        return;
+      }
+      const btn = $('fb-submit-btn');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...'; }
+      try {
+        const res = await invokeCmd('api_submit_feedback', {
+          apiBase: state.apiBase,
+          token: state.token || null,
+          category: $('fb-category')?.value || 'feature_request',
+          rating: fbRating,
+          message: msg,
+          contactEmail: ($('fb-email')?.value || '').trim() || null,
+        });
+        showToast(res?.message || 'ขอบคุณสำหรับข้อเสนอแนะ! ทีมพัฒนาได้รับแล้ว ✓', 'ok');
+        if ($('fb-message')) $('fb-message').value = '';
+        $('modal-feedback')?.classList.add('hidden');
+      } catch (err) {
+        showToast(`ส่งข้อเสนอแนะไม่สำเร็จ: ${err}`, 'err');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📨 ส่งข้อเสนอแนะ'; }
+      }
+    });
+
     $('open-cloud-btn').addEventListener('click', () => invokeCmd('open_cloud_studio', { url: `${state.apiBase}/app`, token: state.token || null }).catch((e) => showToast(String(e), 'err')));
 
     $('pick-files-btn').addEventListener('click', async () => {

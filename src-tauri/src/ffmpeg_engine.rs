@@ -156,6 +156,46 @@ impl Default for BrollOverlayItem {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+pub struct VoiceoverClip {
+    pub path: String,
+    pub start: f64,
+    pub volume: f64,
+    pub label: String,
+}
+
+impl Default for VoiceoverClip {
+    fn default() -> Self {
+        Self {
+            path: String::new(),
+            start: 0.0,
+            volume: 1.0,
+            label: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct VoiceoverConfig {
+    pub enabled: bool,
+    pub duck_original: bool,
+    pub original_duck_level: f64, // 0.0..1.0
+    pub clips: Vec<VoiceoverClip>,
+}
+
+impl Default for VoiceoverConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            duck_original: true,
+            original_duck_level: 0.15,
+            clips: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub struct StudioRenderRequest {
     pub video_path: String,
     pub output_path: Option<String>,
@@ -170,6 +210,7 @@ pub struct StudioRenderRequest {
     pub color_speed: ColorSpeedConfig,
     pub bgm: BgmAudioConfig,
     pub broll_overlays: Vec<BrollOverlayItem>,
+    pub voiceover: VoiceoverConfig,
 }
 
 impl Default for StudioRenderRequest {
@@ -188,6 +229,7 @@ impl Default for StudioRenderRequest {
             color_speed: ColorSpeedConfig::default(),
             bgm: BgmAudioConfig::default(),
             broll_overlays: Vec::new(),
+            voiceover: VoiceoverConfig::default(),
         }
     }
 }
@@ -762,53 +804,31 @@ pub async fn render_studio_video(
         cur_label = "[v_wm]".to_string();
     }
 
-    // 5. Optional Audio Speed, Dialogue Volume & BGM Track with Auto Audio Ducking (sidechaincompress)
+    // 5. Optional Audio Speed, Dialogue Volume, Multi-Clip Voiceover/Dubbing & BGM Track with Auto Audio Ducking
     let src_has_audio = probe_has_audio_stream(&ffmpeg, &req.video_path).await;
     let use_bgm = req.bgm.enabled
         && !req.bgm.bgm_path.trim().is_empty()
         && Path::new(req.bgm.bgm_path.trim()).is_file();
+    let valid_vo_clips: Vec<&VoiceoverClip> = if req.voiceover.enabled {
+        req.voiceover
+            .clips
+            .iter()
+            .filter(|c| !c.path.trim().is_empty() && Path::new(c.path.trim()).is_file())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let use_vo = !valid_vo_clips.is_empty();
     let dlg_vol = req.bgm.dialogue_volume.clamp(0.0, 2.0);
     let bgm_vol = req.bgm.bgm_volume.clamp(0.02, 1.0);
-    let need_audio_filter = has_speed || use_bgm || (dlg_vol - 1.0).abs() > 0.02;
+    let need_audio_filter = has_speed || use_bgm || use_vo || (dlg_vol - 1.0).abs() > 0.02;
 
     let mut audio_map_label: Option<String> = None;
     let mut use_shortest = false;
 
     if need_audio_filter {
-        if use_bgm {
-            let bgm_idx = next_input_idx;
-            extra_inputs.push((vec!["-stream_loop".to_string(), "-1".to_string()], req.bgm.bgm_path.trim().to_string()));
-            if src_has_audio {
-                let mut dlg_filters: Vec<String> = Vec::new();
-                if has_speed {
-                    dlg_filters.push(format!("atempo={:.4}", speed));
-                }
-                if (dlg_vol - 1.0).abs() > 0.02 {
-                    dlg_filters.push(format!("volume={:.2}", dlg_vol));
-                }
-                dlg_filters.push("aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo".to_string());
-                chains.push(format!("[0:a]{}[a_dlg]", dlg_filters.join(",")));
-                chains.push(format!(
-                    "[{}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume={:.2}[a_bgm]",
-                    bgm_idx, bgm_vol
-                ));
-                if req.bgm.auto_ducking {
-                    chains.push("[a_dlg]asplit=2[a_dlg_mix][a_dlg_sc]".to_string());
-                    chains.push("[a_bgm][a_dlg_sc]sidechaincompress=threshold=0.03:ratio=6:attack=80:release=450[a_bgm_duck]".to_string());
-                    chains.push("[a_dlg_mix][a_bgm_duck]amix=inputs=2:duration=first:normalize=0[a_out]".to_string());
-                } else {
-                    chains.push("[a_dlg][a_bgm]amix=inputs=2:duration=first:normalize=0[a_out]".to_string());
-                }
-                audio_map_label = Some("[a_out]".to_string());
-            } else {
-                chains.push(format!(
-                    "[{}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume={:.2}[a_out]",
-                    bgm_idx, bgm_vol
-                ));
-                audio_map_label = Some("[a_out]".to_string());
-                use_shortest = true;
-            }
-        } else if src_has_audio {
+        // Stage A: Prepare Original Dialogue [a_orig]
+        if src_has_audio {
             let mut dlg_filters: Vec<String> = Vec::new();
             if has_speed {
                 dlg_filters.push(format!("atempo={:.4}", speed));
@@ -816,7 +836,92 @@ pub async fn render_studio_video(
             if (dlg_vol - 1.0).abs() > 0.02 {
                 dlg_filters.push(format!("volume={:.2}", dlg_vol));
             }
-            chains.push(format!("[0:a]{}[a_out]", dlg_filters.join(",")));
+            dlg_filters.push("aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo".to_string());
+            chains.push(format!("[0:a]{}[a_orig]", dlg_filters.join(",")));
+        }
+
+        // Stage B: Prepare Voiceover Clips [a_vo]
+        if use_vo {
+            let mut vo_labels: Vec<String> = Vec::new();
+            for (k, clip) in valid_vo_clips.iter().enumerate() {
+                let vo_idx = next_input_idx;
+                next_input_idx += 1;
+                extra_inputs.push((Vec::new(), clip.path.trim().to_string()));
+                let delay_ms = ((clip.start.max(0.0) / speed) * 1000.0).round() as u64;
+                let vo_vol = clip.volume.clamp(0.05, 2.5);
+                let lbl = format!("[vo_{}]", k);
+                chains.push(format!(
+                    "[{}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume={:.2},adelay={}|{}{}",
+                    vo_idx, vo_vol, delay_ms, delay_ms, lbl
+                ));
+                vo_labels.push(lbl);
+            }
+            if vo_labels.len() == 1 {
+                chains.push(format!("{}anull[a_vo]", vo_labels[0]));
+            } else {
+                chains.push(format!(
+                    "{}amix=inputs={}:duration=longest:normalize=0[a_vo]",
+                    vo_labels.join(""),
+                    vo_labels.len()
+                ));
+            }
+        }
+
+        // Stage C: Combine Original Dialogue + Voiceover -> [a_vocal]
+        let has_vocal = src_has_audio || use_vo;
+        if src_has_audio && use_vo {
+            let duck_lvl = req.voiceover.original_duck_level.clamp(0.0, 1.0);
+            if req.voiceover.duck_original && duck_lvl <= 0.02 {
+                // Full dubbing replace mode (mute original dialogue)
+                chains.push("[a_vo]anull[a_vocal]".to_string());
+                use_shortest = true;
+            } else if req.voiceover.duck_original {
+                // Sidechain auto-duck original audio whenever narrator speaks
+                let ratio = (1.0 / duck_lvl.max(0.05)).clamp(2.0, 20.0);
+                chains.push("[a_vo]asplit=2[a_vo_mix][a_vo_sc]".to_string());
+                chains.push(format!(
+                    "[a_orig][a_vo_sc]sidechaincompress=threshold=0.02:ratio={:.1}:attack=40:release=350[a_orig_duck]",
+                    ratio
+                ));
+                chains.push("[a_orig_duck][a_vo_mix]amix=inputs=2:duration=first:normalize=0[a_vocal]".to_string());
+            } else {
+                chains.push("[a_orig][a_vo]amix=inputs=2:duration=first:normalize=0[a_vocal]".to_string());
+            }
+        } else if src_has_audio {
+            chains.push("[a_orig]anull[a_vocal]".to_string());
+        } else if use_vo {
+            chains.push("[a_vo]anull[a_vocal]".to_string());
+            use_shortest = true;
+        }
+
+        // Stage D: Optional BGM Track + Auto Audio Ducking under [a_vocal] -> [a_out]
+        if use_bgm {
+            let bgm_idx = next_input_idx;
+            next_input_idx += 1;
+            let _ = next_input_idx;
+            extra_inputs.push((
+                vec!["-stream_loop".to_string(), "-1".to_string()],
+                req.bgm.bgm_path.trim().to_string(),
+            ));
+            chains.push(format!(
+                "[{}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume={:.2}[a_bgm]",
+                bgm_idx, bgm_vol
+            ));
+            if has_vocal {
+                if req.bgm.auto_ducking {
+                    chains.push("[a_vocal]asplit=2[a_voc_mix][a_voc_sc]".to_string());
+                    chains.push("[a_bgm][a_voc_sc]sidechaincompress=threshold=0.03:ratio=6:attack=80:release=450[a_bgm_duck]".to_string());
+                    chains.push("[a_voc_mix][a_bgm_duck]amix=inputs=2:duration=first:normalize=0[a_out]".to_string());
+                } else {
+                    chains.push("[a_vocal][a_bgm]amix=inputs=2:duration=first:normalize=0[a_out]".to_string());
+                }
+            } else {
+                chains.push("[a_bgm]anull[a_out]".to_string());
+                use_shortest = true;
+            }
+            audio_map_label = Some("[a_out]".to_string());
+        } else if has_vocal {
+            chains.push("[a_vocal]anull[a_out]".to_string());
             audio_map_label = Some("[a_out]".to_string());
         }
     }

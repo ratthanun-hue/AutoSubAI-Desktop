@@ -56,6 +56,8 @@
 
         <button id="open-guide-btn" class="btn btn-ghost btn-sm" data-i18n="btnGuide" title="เปิดคู่มือการใช้งานพร้อมภาพประกอบ">📖 คู่มือ</button>
 
+        <button id="open-feedback-btn" class="btn btn-ghost btn-sm" title="ส่งข้อเสนอแนะหรือขอฟีเจอร์ใหม่ให้ทีมพัฒนา">💬 แนะนำฟีเจอร์</button>
+
         <button id="open-cloud-btn" class="btn btn-secondary btn-sm" data-i18n="btnCloudWeb">🌐 เปิดเว็บ</button>
       </div>
     </header>
@@ -392,6 +394,7 @@
                   <button type="button" class="insp-tab" data-insp-tab="bilingual" data-i18n="inspTabBilingual">🌏 ซับ 2 ภาษา</button>
                   <button type="button" class="insp-tab" data-insp-tab="cutshorts" data-i18n="inspTabCutShorts">✂️ แยก/รวม &amp; 9:16</button>
                   <button type="button" class="insp-tab" data-insp-tab="colorbgm" data-i18n="inspTabColorBgm">🎚️ สี/สปีด &amp; BGM</button>
+                  <button type="button" class="insp-tab" data-insp-tab="voiceover">🎙️ พากย์เสียง</button>
                   <button type="button" class="insp-tab" data-insp-tab="brollthumb" data-i18n="inspTabBrollThumb">🖼️ B-Roll &amp; ปกคลิป</button>
                   <button type="button" class="insp-tab" data-insp-tab="glossary" data-i18n="inspTabGlossary">📖 คลังตัวละคร</button>
                 </div>
@@ -781,7 +784,50 @@
                   </div>
                 </div>
 
-                <!-- Sub-Tab 7: PHOTO B-ROLL / PiP & VIRAL THUMBNAIL MAKER (Phase 3) -->
+                <!-- Sub-Tab 7: VOICEOVER / DUBBING STUDIO (v1.5.0) -->
+                <div id="insp-pane-voiceover" class="insp-pane hidden">
+                  <div class="vo-rec-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                      <strong style="font-size:12px; color:#fda4af;">🎙️ อัดเสียงพากย์สด (Live Dubbing)</strong>
+                      <label class="toggle-check" style="font-size:11px;">
+                        <input id="vo-rec-autoplay" type="checkbox" checked />
+                        <span>เล่นคลิปตามตอนอัด</span>
+                      </label>
+                    </div>
+                    <button id="vo-record-btn" type="button" class="btn vo-rec-btn btn-sm" style="width:100%; justify-content:center;">
+                      🔴 เริ่มอัดเสียงพากย์สด (ณ Playhead)
+                    </button>
+                    <div class="vo-vu-wrap" title="ระดับเสียงไมโครโฟน">
+                      <div id="vo-vu-fill" class="vo-vu-fill"></div>
+                    </div>
+                    <button id="vo-import-btn" type="button" class="btn btn-secondary btn-xs" style="width:100%; justify-content:center;">
+                      📂 นำเข้าไฟล์เสียงพากย์ (.MP3 / .WAV / .M4A)
+                    </button>
+                  </div>
+
+                  <div style="margin-top:10px; display:flex; flex-direction:column; gap:7px;">
+                    <label class="toggle-check">
+                      <input id="vo-enabled" type="checkbox" checked />
+                      <span>เปิดใช้งานแทร็กเสียงพากย์ตอนพรีวิว &amp; ส่งออก MP4</span>
+                    </label>
+                    <label class="toggle-check">
+                      <input id="vo-duck-orig" type="checkbox" checked />
+                      <span>ลดเสียงต้นฉบับอัตโนมัติขณะมีเสียงพากย์ (Auto-Ducking)</span>
+                    </label>
+                    <div class="insp-field">
+                      <label>ระดับเสียงต้นฉบับขณะพากย์: <strong id="vo-duck-level-val">15%</strong></label>
+                      <input id="vo-duck-level" type="range" min="0" max="100" value="15" />
+                      <small class="muted" style="font-size:10.5px;">0% = ปิดเสียงพูดเดิม (พากย์ทับเต็มตัว) • 15% = หรี่เสียงเดิมเบาๆ • 100% = ผสมเท่ากัน</small>
+                    </div>
+                  </div>
+
+                  <div style="margin-top:10px;">
+                    <div style="font-size:11.5px; font-weight:700; color:#e2e8f0; margin-bottom:6px;">รายการเสียงพากย์บนแทร็ก T3 (ลากย้ายบนไทม์ไลน์ได้)</div>
+                    <div id="pro-vo-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+                  </div>
+                </div>
+
+                <!-- Sub-Tab 8: PHOTO B-ROLL / PiP & VIRAL THUMBNAIL MAKER (Phase 3) -->
                 <div id="insp-pane-brollthumb" class="insp-pane hidden">
                   <div class="pro-split-box">
                     <div class="pro-split-head">
@@ -888,16 +934,20 @@
             </section>
           </div>
 
-          <!-- FULL-WIDTH BOTTOM DOCK: 4-TRACK VISUAL TIMELINE (100% Edge-to-Edge) -->
+          <!-- DRAGGABLE TIMELINE HEIGHT RESIZER (v1.5.0) -->
+          <div id="timeline-resizer" class="timeline-resizer-bar" title="ลากขึ้น-ลงเพื่อย่อ/ขยายความสูงกล่อง Timeline (160px–420px)"></div>
+
+          <!-- FULL-WIDTH BOTTOM DOCK: 5-TRACK RESIZABLE VISUAL TIMELINE (100% Edge-to-Edge) -->
           <section class="card studio-timeline-dock">
             <div class="waveform-toolbar">
               <div class="transport-group">
-                <span class="muted" style="font-weight:700; color:#e2e8f0;">🎞️ 4-Track Visual Timeline</span>
+                <span class="muted" style="font-weight:700; color:#e2e8f0;">🎞️ 5-Track Visual Timeline</span>
                 <button type="button" class="chip-btn active" data-wf-zoom="1">1x</button>
                 <button type="button" class="chip-btn" data-wf-zoom="2">2x</button>
                 <button type="button" class="chip-btn" data-wf-zoom="4">4x</button>
                 <button type="button" class="chip-btn" data-wf-zoom="8">8x</button>
                 <button type="button" class="chip-btn" data-wf-zoom="16">16x</button>
+                <button id="wf-expand-btn" type="button" class="btn btn-ghost btn-xs" title="ขยาย/ย่อความสูงไทม์ไลน์ (หรือลากแถบด้านบน)">⤢ ขยาย/ย่อ</button>
               </div>
               <div class="transport-group">
                 <button id="wf-razor-split-btn" type="button" class="btn btn-secondary btn-xs" title="วางเส้นตัด ณ Playhead [B]">🔪 วางเส้นตัด [B]</button>
@@ -907,7 +957,7 @@
                 <button id="wf-clear-cuts-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnClearCuts">🧹 ล้างจุดตัด</button>
               </div>
             </div>
-            <div id="studio-waveform-wrap" class="waveform-wrap" title="คลิกเพื่อกรอ • ลากขอบบล็อกซับบนแทร็ก T3 เพื่อจูนเวลา / Click to seek • Drag T3 cue edges to re-time">
+            <div id="studio-waveform-wrap" class="waveform-wrap" title="คลิกเพื่อกรอ • ลากขอบบล็อกซับบนแทร็ก T4 • ลากย้ายเสียงพากย์บนแทร็ก T3">
               <canvas id="studio-waveform-canvas"></canvas>
             </div>
           </section>
@@ -1077,6 +1127,52 @@
         <div class="modal-foot">
           <button type="button" class="btn btn-ghost btn-sm" data-close-modal="modal-merge-clips" data-i18n="btnCancel">ยกเลิก</button>
           <button id="merge-run-btn" type="button" class="btn btn-primary btn-sm" data-i18n="btnStartMerge">🔗 เริ่มรวมไฟล์วิดีโอ + ซับ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: User Feedback & Feature Request (v1.5.0) -->
+    <div id="modal-feedback" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3>💬 ส่งข้อเสนอแนะ / ขอฟีเจอร์ใหม่</h3>
+          <button type="button" class="btn-icon" data-close-modal="modal-feedback">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+          <p class="muted" style="font-size:12px; margin:0; line-height:1.5;">
+            บอกทีมพัฒนา AutoSubAI ได้เลยว่าอยากได้ฟีเจอร์อะไรเพิ่ม หรือติดปัญหาตรงไหน เพื่อให้แอปช่วยทำซับ/ตัดต่อ/ถอดเสียงของคุณได้ง่ายและสร้างรายได้คล่องขึ้นครับ
+          </p>
+          <div class="insp-field">
+            <label for="fb-category">หมวดหมู่</label>
+            <select id="fb-category">
+              <option value="feature_request">💡 ขอฟีเจอร์ใหม่</option>
+              <option value="ux_improvement">🎨 ปรับปรุงให้ใช้งานง่ายขึ้น</option>
+              <option value="bug_report">🐞 แจ้งปัญหา / บั๊ก</option>
+              <option value="praise">⭐ ติชม / ให้กำลังใจทีมงาน</option>
+            </select>
+          </div>
+          <div class="insp-field">
+            <label>ความพึงพอใจโดยรวม</label>
+            <div id="fb-stars" class="fb-stars">
+              <span class="fb-star" data-fb-star="1">★</span>
+              <span class="fb-star" data-fb-star="2">★</span>
+              <span class="fb-star" data-fb-star="3">★</span>
+              <span class="fb-star" data-fb-star="4">★</span>
+              <span class="fb-star" data-fb-star="5">★</span>
+            </div>
+          </div>
+          <div class="insp-field">
+            <label for="fb-message">รายละเอียดข้อเสนอแนะ</label>
+            <textarea id="fb-message" rows="4" placeholder="เช่น อยากให้เพิ่มปุ่ม Export Word สำหรับงานประชุม, อยากให้มีฟอนต์เพิ่ม, หรือแจ้งจุดที่ใช้งานยาก..."></textarea>
+          </div>
+          <div class="insp-field">
+            <label for="fb-email">อีเมลติดต่อกลับ (ไม่บังคับ)</label>
+            <input id="fb-email" type="email" placeholder="your@email.com (ถ้าล็อกอินแล้วระบบจะเติมให้อัตโนมัติ)" />
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost btn-sm" data-close-modal="modal-feedback" data-i18n="btnCancel">ยกเลิก</button>
+          <button id="fb-submit-btn" type="button" class="btn btn-primary btn-sm">📨 ส่งข้อเสนอแนะ</button>
         </div>
       </div>
     </div>

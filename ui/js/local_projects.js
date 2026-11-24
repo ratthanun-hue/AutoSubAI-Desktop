@@ -464,7 +464,7 @@
             progText.textContent = '✨ รอคิว AutoSub Contextual Mastermind™...';
           } else if (st === 'refining_llm') {
             progFill.style.width = '88%';
-            progText.textContent = '✨ กำลังเกลาคำและบริบทด้วย AI...';
+            progText.textContent = '✨ กำลังตรวจทานซับและบริบทด้วย AI...';
           } else {
             progFill.style.width = `${Math.max(45, Math.min(72, Number(jobData.progress) || 55))}%`;
             progText.textContent = '🎙️ กำลังถอดเสียงบน AutoSubAI Cloud...';
