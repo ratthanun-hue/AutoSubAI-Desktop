@@ -701,6 +701,9 @@ pub async fn transcribe_local_file(
     //   -et 2.4 : entropy threshold to break repetitive decoder loops
     //   -tp 0.0 -tpi 0.2 : greedy start + automatic temperature fallback
     //   --no-speech-thold 0.50 : balanced non-speech gating
+    // GPU acceleration:
+    //   - Windows: Vulkan GPU (auto-detects vulkan-1.dll, auto-retries with -ng CPU fallback on driver error)
+    //   - macOS ARM64: Apple Metal GPU (with auto -ng CPU fallback)
     let lang_clean = match language.trim().to_lowercase().as_str() {
         "th" | "en" | "zh" | "ja" | "ko" | "auto" => language.trim().to_lowercase(),
         _ => "th".to_string(),
@@ -710,36 +713,64 @@ pub async fn transcribe_local_file(
         .unwrap_or(4)
         .to_string();
 
+    #[cfg(target_os = "windows")]
+    let has_gpu_runtime = Path::new(r"C:\Windows\System32\vulkan-1.dll").is_file();
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    let has_gpu_runtime = true;
+    #[cfg(not(any(target_os = "windows", all(target_os = "macos", target_arch = "aarch64"))))]
+    let has_gpu_runtime = false;
+
+    let base_args: Vec<String> = vec![
+        "-m".into(),
+        model_path.to_string_lossy().to_string(),
+        "-f".into(),
+        wav_path.to_string_lossy().to_string(),
+        "-l".into(),
+        lang_clean.clone(),
+        "-t".into(),
+        threads,
+        "-mc".into(),
+        "0".into(),
+        "-sns".into(),
+        "-et".into(),
+        "2.4".into(),
+        "-tp".into(),
+        "0.0".into(),
+        "-tpi".into(),
+        "0.2".into(),
+        "--no-speech-thold".into(),
+        "0.50".into(),
+        "-oj".into(),
+        "-of".into(),
+        out_prefix.to_string_lossy().to_string(),
+    ];
+
+    let mut used_cpu_fallback = !has_gpu_runtime;
+    let mut run_args = base_args.clone();
+    if used_cpu_fallback {
+        run_args.push("-ng".into());
+    }
+
     let mut w_cmd = Command::new(&whisper_bin);
     #[cfg(target_os = "windows")]
     w_cmd.creation_flags(0x08000000);
-    let w_out = w_cmd
-        .args([
-            "-m",
-            &model_path.to_string_lossy(),
-            "-f",
-            &wav_path.to_string_lossy(),
-            "-l",
-            &lang_clean,
-            "-t",
-            &threads,
-            "-mc",
-            "0",
-            "-sns",
-            "-et",
-            "2.4",
-            "-tp",
-            "0.0",
-            "-tpi",
-            "0.2",
-            "--no-speech-thold",
-            "0.50",
-            "-oj",
-            "-of",
-            &out_prefix.to_string_lossy(),
-        ])
-        .output()
-        .await;
+    let mut w_out = w_cmd.args(&run_args).output().await;
+
+    // Auto-fallback to CPU (-ng) if GPU backend fails (e.g. unsupported driver / low VRAM)
+    let gpu_failed = match &w_out {
+        Ok(o) => !o.status.success() || !out_json_path.is_file(),
+        Err(_) => true,
+    };
+    if gpu_failed && !used_cpu_fallback {
+        let _ = tokio::fs::remove_file(&out_json_path).await;
+        used_cpu_fallback = true;
+        let mut cpu_args = base_args;
+        cpu_args.push("-ng".into());
+        let mut fb_cmd = Command::new(&whisper_bin);
+        #[cfg(target_os = "windows")]
+        fb_cmd.creation_flags(0x08000000);
+        w_out = fb_cmd.args(&cpu_args).output().await;
+    }
 
     let _ = tokio::fs::remove_file(&wav_path).await;
 
@@ -776,8 +807,25 @@ pub async fn transcribe_local_file(
     let (srt, vtt, text) = build_srt_vtt(&segments);
     let elapsed = (t_start.elapsed().as_secs_f64() * 100.0).round() / 100.0;
 
+    let engine_label = if !used_cpu_fallback {
+        #[cfg(target_os = "windows")]
+        {
+            "whisper.cpp (Vulkan GPU)".to_string()
+        }
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        {
+            "whisper.cpp (Metal GPU)".to_string()
+        }
+        #[cfg(not(any(target_os = "windows", all(target_os = "macos", target_arch = "aarch64"))))]
+        {
+            "whisper.cpp (CPU)".to_string()
+        }
+    } else {
+        "whisper.cpp (CPU)".to_string()
+    };
+
     Ok(WhisperTranscribeResult {
-        engine: "whisper.cpp (1-Step Local)".to_string(),
+        engine: engine_label,
         model_filename: safe_model,
         language: lang_clean,
         duration_seconds: dur,

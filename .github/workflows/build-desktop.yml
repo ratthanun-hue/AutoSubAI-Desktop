@@ -22,7 +22,7 @@ jobs:
             ffmpeg_url: "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-win32-x64.gz"
             ffmpeg_dest: "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"
             whisper_dest: "src-tauri/binaries/whisper-cli-x86_64-pc-windows-msvc.exe"
-            whisper_cmake_args: "-DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF -DWHISPER_BUILD_EXAMPLES=ON"
+            whisper_cmake_args: "-DBUILD_SHARED_LIBS=OFF -DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF -DWHISPER_BUILD_EXAMPLES=ON"
             verify_exec: true
             artifact_name: AutoSubAI-Windows-x64-AllInOne
           - platform_label: macOS Apple Silicon M1-M4 (aarch64 .dmg — All-in-One)
@@ -98,13 +98,23 @@ jobs:
             "${{ matrix.ffmpeg_dest }}" -version | head -n 3
           fi
 
+      - name: Install Vulkan SDK (Windows GPU acceleration for NVIDIA/AMD/Intel)
+        if: runner.os == 'Windows'
+        uses: humbletim/setup-vulkan-sdk@v1.2.1
+        with:
+          vulkan-version: 'latest'
+
       - name: Build & verify bundled static whisper-cli sidecar (whisper.cpp v1.7.5)
         shell: bash
         run: |
           set -euo pipefail
           rm -rf /tmp/whisper.cpp
           git clone --depth 1 --branch v1.7.5 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper.cpp
-          cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build ${{ matrix.whisper_cmake_args }}
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build ${{ matrix.whisper_cmake_args }} -DCMAKE_EXE_LINKER_FLAGS="/DELAYLOAD:vulkan-1.dll delayimp.lib"
+          else
+            cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build ${{ matrix.whisper_cmake_args }}
+          fi
           cmake --build /tmp/whisper.cpp/build --config Release --target whisper-cli -j 4
           BIN_PATH=$(find /tmp/whisper.cpp/build -type f \( -name "whisper-cli" -o -name "whisper-cli.exe" \) | head -n 1)
           echo "Built whisper-cli at: $BIN_PATH"
@@ -156,27 +166,26 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.10.1-beta Release
+      - name: Create or update desktop-v1.10.2-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.10.1-beta
-          name: "AutoSubAI Desktop Pro Studio v1.10.1 Beta — Anti-Hallucination Local Voice Engine + Full Base Model (148 MB)"
+          tag_name: desktop-v1.10.2-beta
+          name: "AutoSubAI Desktop Pro Studio v1.10.2 Beta — Windows Vulkan GPU Acceleration + Local Workspace Auto-Save"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.10.1 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.10.2 Beta)
 
-            ### Downloads (All-in-One with Built-in FFmpeg 6.1.1, Static whisper.cpp & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.10.1_x64-setup.exe` (or `AutoSubAI_1.10.1_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4 — Native Metal GPU)**: `AutoSubAI_1.10.1_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.10.1_x64.dmg`
-            - **🐧 Linux Desktop (x86_64)**: `AutoSubAI_1.10.1_amd64.AppImage` (Universal) or `AutoSubAI_1.10.1_amd64.deb` (Ubuntu / Debian)
+            ### Downloads (All-in-One with Built-in FFmpeg 6.1.1, Static whisper.cpp GPU & Thai Fonts)
+            - **Windows 10 / 11 (64-bit — Vulkan GPU for NVIDIA / AMD / Intel + Auto CPU Fallback)**: `AutoSubAI_1.10.2_x64-setup.exe` (or `AutoSubAI_1.10.2_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4 — Native Metal GPU)**: `AutoSubAI_1.10.2_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.10.2_x64.dmg`
+            - **🐧 Linux Desktop (x86_64)**: `AutoSubAI_1.10.2_amd64.AppImage` (Universal) or `AutoSubAI_1.10.2_amd64.deb` (Ubuntu / Debian)
 
-            ### What's New in v1.10.1 Beta
-            - 🛡️ **Fixed `[เสียงดนตรี]` Hallucination Loop**: Added `-mc 0` (disable cross-window context loops), `-sns` (suppress non-speech tags), `-et 2.4` + `-tp 0.0 -tpi 0.2`, FFmpeg Voice Pre-Filter (`highpass=80Hz, lowpass=7800Hz, dynaudnorm`), and Thai/EN non-speech & repetition Post-Filter.
-            - 🎯 **Upgraded Free Local Model to Full Unquantized `ggml-base.bin` (~148 MB)** for dramatically better Thai speech detection over background music (controlled live via `/v1/desktop/config`).
-            - 🏷️ **Clean Thai Brand Labels**: Displays `โมเดลถอดเสียง (เวอร์ชั่นฟรี)` / `เวอร์ชั่นฟรี-ไม่หักเครดิต` directly out of the box.
-            - 🎞️ **Includes T2 Video Filmstrip Snapshots, Ed25519 Signed UI Hot-Patch Engine & Local-Only Meeting Workspace**.
+            ### What's New in v1.10.2 Beta
+            - 🚀 **Windows Vulkan GPU Acceleration (`-DGGML_VULKAN=ON`)**: Hardware-accelerated local offline transcription on NVIDIA, AMD, and Intel GPUs with `/DELAYLOAD:vulkan-1.dll` and automatic `-ng` CPU fallback for PCs without Vulkan drivers.
+            - 💾 **Local Workspace Auto-Save**: Offline-transcribed videos are now automatically persisted into **Local Workspace** (`💻 Local Workspace`) with full subtitle history, thumbnail preview, and permanent Subtitle Studio edit syncing.
+            - 🛡️ **Includes v1.10.1 Anti-Hallucination Engine (`-mc 0 -sns`), T2 Video Filmstrip Snapshots, Ed25519 Signed UI Hot-Patch & Local-Only Meeting Workspace**.
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

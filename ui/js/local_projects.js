@@ -112,6 +112,66 @@
       this.render();
     }
 
+    upsertTranscribedProject({
+      videoPath,
+      name = '',
+      subtitlePath = '',
+      segments = [],
+      sizeBytes = 0,
+      durationSeconds = 0,
+      language = 'th',
+      isOfflineDraft = true,
+    }) {
+      const cleanPath = String(videoPath || '').trim();
+      if (!cleanPath) return null;
+      const ext = this.host.getFileExt(cleanPath);
+      const nowStr = new Date().toLocaleString();
+      const normSegs = (Array.isArray(segments) ? segments : []).map((s) => ({
+        start: Number(s.start) || 0,
+        end: Number(s.end) || 0,
+        text: String(s.text || ''),
+        secondary_text: String(s.secondary_text || ''),
+      }));
+
+      const idx = this.projects.findIndex((x) => x.videoPath === cleanPath);
+      if (idx >= 0) {
+        const existing = this.projects[idx];
+        existing.segments = normSegs;
+        if (subtitlePath) existing.subtitlePath = subtitlePath;
+        if (durationSeconds > 0) existing.durationSeconds = durationSeconds;
+        if (sizeBytes > 0) existing.sizeBytes = sizeBytes;
+        existing.language = language || existing.language || 'th';
+        existing.isOfflineDraft = Boolean(isOfflineDraft);
+        existing.updatedAt = nowStr;
+        if (idx > 0) {
+          this.projects.splice(idx, 1);
+          this.projects.unshift(existing);
+        }
+        this._save();
+        this.render();
+        return existing;
+      }
+
+      const proj = {
+        id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: name || this.host.getFileName(cleanPath),
+        videoPath: cleanPath,
+        isVideo: VIDEO_EXTS.has(ext),
+        subtitlePath: subtitlePath || '',
+        sizeBytes: Number(sizeBytes) || 0,
+        durationSeconds: Number(durationSeconds) || 0,
+        language: language || 'th',
+        segments: normSegs,
+        isOfflineDraft: Boolean(isOfflineDraft),
+        createdAt: nowStr,
+        updatedAt: nowStr,
+      };
+      this.projects.unshift(proj);
+      this._save();
+      this.render();
+      return proj;
+    }
+
     async addMediaPaths(paths) {
       if (!Array.isArray(paths) || !paths.length) return;
       let added = 0;

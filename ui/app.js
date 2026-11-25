@@ -805,19 +805,35 @@
       secondary_text: '',
     }));
 
-    item.offlineProject = {
+    // Persist directly into Local Workspace so edits, thumbnails & history stay saved permanently
+    const savedLocalProj = localWorkspace
+      ? localWorkspace.upsertTranscribedProject({
+          videoPath: item.path,
+          name: item.name,
+          subtitlePath: item.srtPath || '',
+          segments: segs,
+          sizeBytes: item.sizeBytes || 0,
+          durationSeconds: res.duration_seconds || item.durationSeconds || 0,
+          language: state.lang || 'th',
+          isOfflineDraft: true,
+        })
+      : null;
+
+    item.offlineProject = savedLocalProj || {
       id: `offline_${item.id}_${Date.now()}`,
-      name: `${item.name} (เวอร์ชั่นฟรี-ไม่หักเครดิต)`,
+      name: item.name,
       videoPath: item.path,
-      srtPath: item.srtPath || '',
+      subtitlePath: item.srtPath || '',
       segments: segs,
       durationSeconds: res.duration_seconds || item.durationSeconds || 0,
       isOfflineDraft: true,
     };
 
+    const accelLabel = res.engine && res.engine.includes('Vulkan') ? ' • Vulkan GPU'
+      : (res.engine && res.engine.includes('Metal') ? ' • Metal GPU' : '');
     item.status = 'done';
     item.progress = 100;
-    item.note = `🆓 เสร็จแล้วใน ${res.elapsed_seconds} วิ (${segs.length} บรรทัด • เวอร์ชั่นฟรี-ไม่หักเครดิต)`;
+    item.note = `🆓 เสร็จแล้วใน ${res.elapsed_seconds} วิ (${segs.length} บรรทัด${accelLabel} • บันทึกลง Local Workspace แล้ว)`;
     renderQueue();
   }
 
