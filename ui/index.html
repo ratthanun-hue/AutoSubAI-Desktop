@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AutoSubAI Desktop Studio — Drama Subtitling &amp; Style Inspector</title>
-  <link rel="stylesheet" href="style.css" />
+  <link id="autosub-main-css" rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app-shell">
@@ -15,7 +15,7 @@
         <div>
           <div class="brand-title">
             AutoSubAI Desktop
-            <span class="badge-beta">v1.9.0 Pro Studio</span>
+            <span class="badge-beta">v1.9.1 Pro Studio</span>
           </div>
           <div class="brand-sub" data-i18n="brandSub">Local &amp; Cloud Drama Subtitling, Style Inspector &amp; Video Finishing</div>
         </div>
@@ -1527,14 +1527,99 @@
     <div id="toast-root" class="toast-root" aria-live="polite"></div>
   </div>
 
-  <script src="js/i18n.js"></script>
-  <script src="js/waveform.js"></script>
-  <script src="js/glossary.js"></script>
-  <script src="js/local_projects.js"></script>
-  <script src="js/studio.js"></script>
-  <script src="js/split_merge.js"></script>
-  <script src="js/pro_editor.js"></script>
-  <script src="js/meeting.js"></script>
-  <script src="app.js"></script>
+  <!-- Same-Origin Signed UI Hot-Patch Bootloader + Zero-Brick 5s Crash Watchdog (v1.9.1) -->
+  <script id="autosub-patch-bootloader">
+    (async function () {
+      const BUILTIN_SCRIPTS = [
+        'js/i18n.js',
+        'js/waveform.js',
+        'js/glossary.js',
+        'js/local_projects.js',
+        'js/studio.js',
+        'js/split_merge.js',
+        'js/pro_editor.js',
+        'js/meeting.js',
+        'app.js',
+      ];
+
+      function loadBuiltinSequential() {
+        let i = 0;
+        const next = () => {
+          if (i >= BUILTIN_SCRIPTS.length) return;
+          const s = document.createElement('script');
+          s.src = BUILTIN_SCRIPTS[i++];
+          s.async = false;
+          s.onload = next;
+          s.onerror = next;
+          document.body.appendChild(s);
+        };
+        next();
+      }
+
+      const tauriInvoke = window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function'
+        ? window.__TAURI__.core.invoke
+        : (typeof window.__AUTOSUB_TEST_PATCH_INVOKE__ === 'function' ? window.__AUTOSUB_TEST_PATCH_INVOKE__ : null);
+
+      if (!tauriInvoke) {
+        loadBuiltinSequential();
+        return;
+      }
+
+      try {
+        const bundle = await Promise.race([
+          tauriInvoke('get_active_ui_patch_bundle'),
+          new Promise((resolve) => setTimeout(() => resolve({ active: false }), 2500)),
+        ]);
+
+        if (bundle && bundle.active && bundle.html && Array.isArray(bundle.scripts) && bundle.scripts.length) {
+          // Arm 5-second Zero-Brick Watchdog before running patched UI
+          window.__AUTOSUB_BOOT_OK__ = false;
+          window.__AUTOSUB_UI_PATCH__ = {
+            version: bundle.patch_version || '',
+            confirmed: !!bundle.confirmed,
+          };
+
+          const rollbackNow = async () => {
+            try { await tauriInvoke('rollback_ui_patch'); } catch (_) {}
+            window.location.reload();
+          };
+
+          const watchdogTimer = setTimeout(() => {
+            if (!window.__AUTOSUB_BOOT_OK__) rollbackNow();
+          }, 5000);
+          window.__AUTOSUB_CLEAR_WATCHDOG__ = () => clearTimeout(watchdogTimer);
+
+          // Apply patched CSS
+          if (bundle.css) {
+            const oldCss = document.getElementById('autosub-main-css');
+            const st = document.createElement('style');
+            st.id = 'autosub-patched-css';
+            st.textContent = bundle.css;
+            document.head.appendChild(st);
+            if (oldCss) oldCss.remove();
+          }
+
+          // Swap body markup cleanly on the exact same origin (preserves localStorage + __TAURI__ IPC)
+          const doc = new DOMParser().parseFromString(bundle.html, 'text/html');
+          doc.querySelectorAll('script').forEach((el) => el.remove());
+          document.body.innerHTML = doc.body.innerHTML;
+
+          // Execute patched scripts in strict order
+          for (const item of bundle.scripts) {
+            const s = document.createElement('script');
+            s.dataset.patchedSrc = item.src || '';
+            s.textContent = item.code || '';
+            document.body.appendChild(s);
+          }
+          return;
+        }
+      } catch (err) {
+        console.error('UI Patch Bootloader fallback:', err);
+        try { await tauriInvoke('rollback_ui_patch'); } catch (_) {}
+      }
+
+      loadBuiltinSequential();
+    })();
+  </script>
 </body>
 </html>

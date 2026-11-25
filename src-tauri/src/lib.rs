@@ -1,6 +1,7 @@
 mod ass_builder;
 mod docx_builder;
 mod ffmpeg_engine;
+mod patch_engine;
 mod tts_engine;
 
 use ass_builder::{build_ass_document, CueItem, SubtitleStyleConfig};
@@ -1354,6 +1355,34 @@ async fn api_submit_feedback(
 }
 
 #[tauri::command]
+async fn check_ui_patch_update(app: AppHandle) -> Result<Value, String> {
+    patch_engine::check_ui_patch_update(&app).await
+}
+
+#[tauri::command]
+async fn apply_ui_patch(
+    app: AppHandle,
+    manifest: patch_engine::PatchManifest,
+) -> Result<Value, String> {
+    patch_engine::apply_ui_patch(&app, manifest).await
+}
+
+#[tauri::command]
+async fn get_active_ui_patch_bundle(app: AppHandle) -> Result<Value, String> {
+    patch_engine::get_active_ui_patch_bundle(&app)
+}
+
+#[tauri::command]
+async fn confirm_ui_patch_boot(app: AppHandle) -> Result<bool, String> {
+    patch_engine::confirm_ui_patch_boot(&app)
+}
+
+#[tauri::command]
+async fn rollback_ui_patch(app: AppHandle) -> Result<bool, String> {
+    patch_engine::rollback_ui_patch(&app)
+}
+
+#[tauri::command]
 async fn export_meeting_docx(req: docx_builder::MeetingDocxRequest) -> Result<String, String> {
     docx_builder::write_meeting_docx(&req).await
 }
@@ -1558,7 +1587,12 @@ pub fn run() {
             reveal_in_folder,
             open_cloud_studio,
             check_app_update,
-            download_and_launch_update
+            download_and_launch_update,
+            check_ui_patch_update,
+            apply_ui_patch,
+            get_active_ui_patch_bundle,
+            confirm_ui_patch_boot,
+            rollback_ui_patch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoSubAI Desktop");

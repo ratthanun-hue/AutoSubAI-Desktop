@@ -279,14 +279,33 @@
   }
 
   // --- Built-in Auto-Updater ---
+  // --- Hybrid 2-Layer Auto-Updater (Layer 1: ~220KB Ed25519 Signed UI Patch | Layer 2: Native Binary) ---
   async function checkAppUpdateSilent() {
     try {
-      const info = await invokeCmd('check_app_update');
-      if (info && info.has_update && info.latest_version) {
-        state.updateInfo = info;
-        const pill = $('update-pill');
-        $('update-pill-text').textContent = `Update v${info.latest_version}`;
-        pill.title = `New version v${info.latest_version} available (${formatBytes(info.size_bytes)}) — Click to download & install`;
+      const [nativeInfo, patchInfo] = await Promise.all([
+        invokeCmd('check_app_update').catch(() => null),
+        invokeCmd('check_ui_patch_update').catch(() => null),
+      ]);
+
+      const pill = $('update-pill');
+      const pillText = $('update-pill-text');
+      if (!pill || !pillText) return;
+
+      // Priority 1: Native binary update (Rust/FFmpeg upgrade)
+      if (nativeInfo && nativeInfo.has_update && nativeInfo.latest_version) {
+        state.updateInfo = { mode: 'native', ...nativeInfo };
+        pillText.textContent = `Update v${nativeInfo.latest_version}`;
+        pill.title = `New Native Studio v${nativeInfo.latest_version} available (${formatBytes(nativeInfo.size_bytes)}) — Click to download & install`;
+        pill.classList.remove('hidden');
+        return;
+      }
+
+      // Priority 2: Instant Signed UI Hot-Patch (~220 KB, < 1 sec, zero SmartScreen!)
+      if (patchInfo && patchInfo.has_patch && patchInfo.patch_version) {
+        state.updateInfo = { mode: 'ui_patch', ...patchInfo };
+        const kb = patchInfo.size_bytes ? `${Math.max(1, Math.round(patchInfo.size_bytes / 1024))} KB` : '~220 KB';
+        pillText.textContent = `⚡ Patch v${patchInfo.patch_version}`;
+        pill.title = `Instant Signed UI Patch v${patchInfo.patch_version} (${kb})${patchInfo.notes ? ` — ${patchInfo.notes}` : ''} — Click to apply in <1s`;
         pill.classList.remove('hidden');
       }
     } catch (_) {}
@@ -296,9 +315,40 @@
     const info = state.updateInfo;
     if (!info) return;
     const pill = $('update-pill');
+    const pillText = $('update-pill-text');
+
+    // Layer 1: Instant Ed25519 Signed UI Hot-Patch
+    if (info.mode === 'ui_patch') {
+      pill.disabled = true;
+      pillText.textContent = '⚡ Patching...';
+      showToast(`⚡ กำลังโหลด & ตรวจลายเซ็น Ed25519 Patch v${info.patch_version}...`);
+      try {
+        const res = await invokeCmd('apply_ui_patch', {
+          manifest: {
+            patch_version: info.patch_version,
+            min_native_version: info.min_native_version,
+            size_bytes: info.size_bytes || null,
+            sha256: info.sha256,
+            ed25519_sig: info.ed25519_sig,
+            download_url: info.download_url,
+            notes: info.notes || null,
+          },
+        });
+        const kb = res && res.size_bytes ? `${Math.max(1, Math.round(res.size_bytes / 1024))} KB` : '';
+        showToast(`✅ อัปเดต Patch v${info.patch_version} สำเร็จ (${kb}) — กำลังรีโหลดหน้าจอ...`, 'ok');
+        setTimeout(() => window.location.reload(), 650);
+      } catch (err) {
+        showToast(`อัปเดต Patch ไม่สำเร็จ: ${String(err)}`, 'err');
+        pill.disabled = false;
+        pillText.textContent = `⚡ Patch v${info.patch_version}`;
+      }
+      return;
+    }
+
+    // Layer 2: Native Binary Installer Update
     if (info.download_url && info.asset_name) {
       pill.disabled = true;
-      $('update-pill-text').textContent = 'Downloading...';
+      pillText.textContent = 'Downloading...';
       showToast(`กำลังดาวน์โหลด AutoSubAI v${info.latest_version}...`);
       try {
         await invokeCmd('download_and_launch_update', {
@@ -313,7 +363,7 @@
         }
       } finally {
         pill.disabled = false;
-        $('update-pill-text').textContent = `Update v${info.latest_version}`;
+        pillText.textContent = `Update v${info.latest_version}`;
       }
     } else if (info.release_url) {
       await invokeCmd('open_cloud_studio', { url: info.release_url, token: null }).catch(() => {});
@@ -1087,13 +1137,31 @@
     if (meetingWorkspace) meetingWorkspace.bindEvents();
   }
 
-  window.addEventListener('DOMContentLoaded', async () => {
+  async function bootDesktopApp() {
     initUI();
     renderQueue();
     localWorkspace.render();
+
+    // Confirm healthy boot to Zero-Brick UI Patch Watchdog
+    window.__AUTOSUB_BOOT_OK__ = true;
+    if (typeof window.__AUTOSUB_CLEAR_WATCHDOG__ === 'function') {
+      window.__AUTOSUB_CLEAR_WATCHDOG__();
+    }
+    if (window.__AUTOSUB_UI_PATCH__ && window.__AUTOSUB_UI_PATCH__.version) {
+      const badge = document.querySelector('.badge-beta');
+      if (badge) badge.textContent = `v${window.__AUTOSUB_UI_PATCH__.version} Pro Studio`;
+      invokeCmd('confirm_ui_patch_boot').catch(() => {});
+    }
+
     await checkLocalFfmpeg();
     localWorkspace.render();
     await refreshProfile(true);
     setTimeout(checkAppUpdateSilent, 2500);
-  });
+  }
+
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', bootDesktopApp);
+  } else {
+    bootDesktopApp();
+  }
 })();
