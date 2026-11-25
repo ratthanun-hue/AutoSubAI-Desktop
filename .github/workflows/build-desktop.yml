@@ -100,9 +100,24 @@ jobs:
 
       - name: Install Vulkan SDK (Windows GPU acceleration for NVIDIA/AMD/Intel)
         if: runner.os == 'Windows'
-        uses: humbletim/setup-vulkan-sdk@v1.2.1
-        with:
-          vulkan-version: 'latest'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ver = (Invoke-RestMethod "https://sdk.lunarg.com/sdk/latest/windows.txt").Trim()
+          Write-Host "Installing LunarG Vulkan SDK $ver ..."
+          $inst = "$env:TEMP\vulkansdk-windows-X64-$ver.exe"
+          curl.exe -fSL --retry 3 "https://sdk.lunarg.com/sdk/download/$ver/windows/vulkansdk-windows-X64-$ver.exe" -o $inst
+          $p = Start-Process -FilePath $inst -ArgumentList "--accept-licenses", "--default-answer", "--confirm-command", "install" -NoNewWindow -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Vulkan SDK install failed with code $($p.ExitCode)" }
+          Remove-Item -Force $inst
+          $sdkDir = "C:\VulkanSDK\$ver"
+          if (-not (Test-Path $sdkDir)) {
+            $sdkDir = (Get-ChildItem "C:\VulkanSDK" -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName
+          }
+          Write-Host "VULKAN_SDK=$sdkDir"
+          "VULKAN_SDK=$sdkDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "$sdkDir\Bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "$sdkDir\Bin\glslc.exe" --version
 
       - name: Build & verify bundled static whisper-cli sidecar (whisper.cpp v1.7.5)
         shell: bash
