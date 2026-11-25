@@ -154,7 +154,8 @@
   class DesktopSubtitleStudio {
     constructor(host) {
       this.host = host;
-      this.sourceType = 'cloud'; // 'local' | 'cloud'
+      this.sourceType = 'cloud';
+      $('studio-offline-upsell-bar')?.classList.add('hidden'); // 'local' | 'cloud'
       this.projectId = '';
       this.filename = '';
       this.language = 'th';
@@ -243,6 +244,11 @@
           this.durationSeconds = video.duration;
           this.renderTimeline();
         }
+        if (this.waveform && video.currentSrc && video.videoWidth > 0 && video.videoHeight > 0) {
+          this.waveform.extractFilmstripFromUrl(video.currentSrc, video.duration);
+        } else if (this.waveform) {
+          this.waveform.clearFilmstrip();
+        }
       });
 
       // Transport
@@ -312,6 +318,22 @@
           this.waveform.setHeight(this.waveform.height, true);
         });
       }
+      const filmBtn = $('wf-filmstrip-btn');
+      if (filmBtn && this.waveform) {
+        filmBtn.classList.toggle('active', !!this.waveform.filmstripEnabled);
+        filmBtn.addEventListener('click', () => {
+          const on = this.waveform.setFilmstripEnabled(!this.waveform.filmstripEnabled, true);
+          filmBtn.classList.toggle('active', on);
+          if (on && video.currentSrc && video.videoWidth > 0) {
+            this.waveform.extractFilmstripFromUrl(video.currentSrc, video.duration);
+          }
+          this.host.showToast(
+            on ? '🎞️ เปิดแถบภาพ Snapshot บนแทร็ก T2 แล้ว' : '🌊 ปิดแถบภาพ Snapshot (ขยายคลื่นเสียงเต็มแทร็ก T2)',
+            'info'
+          );
+        });
+      }
+
       $('wf-expand-btn')?.addEventListener('click', () => {
         if (!this.waveform) return;
         const h = this.waveform.toggleExpand();
@@ -772,6 +794,19 @@
       this.sourceType = 'local';
       this.projectId = localProj.id;
       this.filename = localProj.name || localProj.id;
+      const upsellBar = $('studio-offline-upsell-bar');
+      if (upsellBar) {
+        const isOfflineDraft = !!localProj.isOfflineDraft;
+        upsellBar.classList.toggle('hidden', !isOfflineDraft);
+        if (isOfflineDraft && this.host && this.host.state && this.host.state.offlineConfig) {
+          const isEn = window.DesktopI18n && window.DesktopI18n.getLang() === 'en';
+          const msg = isEn
+            ? (this.host.state.offlineConfig.cloud_upsell_banner_en || '')
+            : (this.host.state.offlineConfig.cloud_upsell_banner_th || '');
+          const txtEl = $('studio-offline-upsell-text');
+          if (txtEl && msg) txtEl.textContent = msg;
+        }
+      }
       this.language = localProj.language || 'th';
       this.durationSeconds = Number(localProj.durationSeconds) || 0;
       this.localVideoPath = localProj.videoPath || '';
@@ -842,6 +877,7 @@
       }
 
       this.sourceType = 'cloud';
+      $('studio-offline-upsell-bar')?.classList.add('hidden');
 
       this.host.switchTab('studio');
       $('studio-empty').classList.add('hidden');
@@ -924,6 +960,7 @@
       } else {
         video.removeAttribute('src');
         video.load();
+        if (this.waveform) this.waveform.clearFilmstrip();
         badge.classList.add('pill-muted');
         badge.textContent = '📄 Subtitles only — Link local video to preview & export MP4';
       }

@@ -13,7 +13,7 @@
     localMap: 'autosub_desktop_local_media_map',
   };
 
-  const PLAN_RATES_PER_MIN = { 'plan-1': 0.069, 'plan-2': 0.125, 'plan-3': 0.245 };
+  const PLAN_RATES_PER_MIN = { 'plan-1': 0.069, 'plan-2': 0.125, 'plan-3': 0.245, 'local-offline': 0 };
   const VIDEO_EXTS = new Set(['mp4', 'mkv', 'mov', 'avi', 'webm', 'ts', 'm4v', 'flv', 'wmv']);
   const AUDIO_EXTS = new Set(['mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'opus']);
   const ALL_MEDIA_EXTS = [...VIDEO_EXTS, ...AUDIO_EXTS];
@@ -43,6 +43,10 @@
     projectsStorage: null,
     projectsLoaded: false,
     updateInfo: null,
+    offlineConfig: null,
+    offlineStatus: { engine_available: false, downloaded: [] },
+    selectedOfflineModel: '',
+    offlineDownloading: false,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -569,7 +573,7 @@
         : (estimateCostThb(item.durationSeconds, state.plan) != null ? ` • ~฿${estimateCostThb(item.durationSeconds, state.plan).toFixed(2)}` : '');
 
       const actions = [];
-      if (item.status === 'done' && item.jobId) {
+      if (item.status === 'done' && (item.jobId || item.offlineProject)) {
         actions.push(`<button class="btn btn-primary btn-xs" data-action="studio" data-id="${item.id}">🎬 Studio</button>`);
       }
       if (item.srtPath) {
@@ -599,7 +603,236 @@
     }).join('');
   }
 
+  // ---------------------------------------------------------------------------
+  // 1-Step Native Offline Whisper.cpp + Remote Feature Flag Control (v1.10.0)
+  // ---------------------------------------------------------------------------
+  function getActiveOfflineModelSpec() {
+    const models = (state.offlineConfig && Array.isArray(state.offlineConfig.models))
+      ? state.offlineConfig.models
+      : [];
+    if (!models.length) return null;
+    const found = models.find((m) => m.id === state.selectedOfflineModel);
+    return found || models[0];
+  }
+
+  function isOfflineModelDownloaded(filename) {
+    const dl = (state.offlineStatus && Array.isArray(state.offlineStatus.downloaded))
+      ? state.offlineStatus.downloaded
+      : [];
+    return dl.find((d) => d.filename === filename) || null;
+  }
+
+  function renderOfflineModelPanel() {
+    const card = $('plan-card-local-offline');
+    const panel = $('offline-model-panel');
+    const cfg = state.offlineConfig;
+    const models = (cfg && Array.isArray(cfg.models)) ? cfg.models : [];
+    const enabled = Boolean(cfg && cfg.offline_whisper_enabled && models.length > 0);
+
+    if (card) card.classList.toggle('hidden', !enabled);
+
+    // If admin disabled offline mode remotely while user had it selected, fall back to plan-2
+    if (!enabled && state.plan === 'local-offline') {
+      state.plan = 'plan-2';
+      localStorage.setItem(STORAGE_KEYS.plan, state.plan);
+      document.querySelectorAll('.plan-card').forEach((c) => c.classList.toggle('active', c.dataset.plan === state.plan));
+    }
+
+    if (!panel) return;
+    const showPanel = enabled && state.plan === 'local-offline';
+    panel.classList.toggle('hidden', !showPanel);
+    if (!showPanel) return;
+
+    const sel = $('offline-model-select');
+    const isEn = window.DesktopI18n && window.DesktopI18n.getLang() === 'en';
+    if (sel) {
+      const cur = state.selectedOfflineModel || cfg.default_model || models[0].id;
+      sel.innerHTML = models.map((m) => {
+        const lbl = isEn ? (m.label_en || m.label_th || m.id) : (m.label_th || m.id);
+        return `<option value="${escapeHtml(m.id)}" ${m.id === cur ? 'selected' : ''}>${escapeHtml(lbl)}</option>`;
+      }).join('');
+      state.selectedOfflineModel = sel.value || models[0].id;
+    }
+
+    const spec = getActiveOfflineModelSpec();
+    const dlInfo = spec ? isOfflineModelDownloaded(spec.filename) : null;
+    const statusEl = $('offline-model-status');
+    const dlBtn = $('offline-download-btn');
+    const delBtn = $('offline-delete-btn');
+    const engBadge = $('offline-engine-badge');
+    const maxMins = Number(cfg.max_offline_minutes || 15);
+
+    if (engBadge) {
+      const ok = !!(state.offlineStatus && state.offlineStatus.engine_available);
+      engBadge.classList.toggle('pill-ok', ok);
+      engBadge.classList.toggle('pill-warn', !ok);
+      engBadge.textContent = ok
+        ? `💻 whisper.cpp พร้อมใช้งาน (≤${maxMins} น./ไฟล์)`
+        : '💻 whisper.cpp (เวอร์ชั่นฟรี-ไม่หักเครดิต)';
+    }
+
+    if (statusEl && spec) {
+      if (dlInfo) {
+        const mb = (dlInfo.size_bytes / (1024 * 1024)).toFixed(1);
+        statusEl.textContent = `✅ โมเดลพร้อมในเครื่องแล้ว (${mb} MB) — ออฟไลน์ 100%`;
+        statusEl.style.color = '#34d399';
+      } else {
+        statusEl.textContent = `⬇️ ยังไม่ได้ดาวน์โหลดโมเดล (~${spec.size_mb || 57} MB • โหลดครั้งเดียว)`;
+        statusEl.style.color = '#fbbf24';
+      }
+    }
+    if (dlBtn) {
+      dlBtn.classList.toggle('hidden', !!dlInfo);
+      dlBtn.disabled = state.offlineDownloading;
+    }
+    if (delBtn) {
+      delBtn.classList.toggle('hidden', !dlInfo);
+      delBtn.disabled = state.offlineDownloading;
+    }
+  }
+
+  async function syncOfflineWhisperConfig() {
+    let cfg = null;
+    try {
+      if (getTauri()) {
+        cfg = await invokeCmd('whisper_fetch_remote_config', {
+          apiBase: state.apiBase,
+          token: state.token || null,
+        });
+      } else {
+        const hdrs = state.token ? { Authorization: `Bearer ${state.token}` } : {};
+        const r = await fetch(`${state.apiBase}/v1/desktop/config`, { headers: hdrs });
+        if (r.ok) cfg = await r.json();
+      }
+    } catch (_) {}
+
+    if (cfg && typeof cfg === 'object') {
+      state.offlineConfig = cfg;
+      if (!state.selectedOfflineModel && cfg.default_model) {
+        state.selectedOfflineModel = cfg.default_model;
+      }
+    }
+
+    try {
+      if (getTauri()) {
+        state.offlineStatus = await invokeCmd('whisper_list_models');
+      }
+    } catch (_) {}
+
+    renderOfflineModelPanel();
+  }
+
+  async function downloadSelectedOfflineModel() {
+    const spec = getActiveOfflineModelSpec();
+    if (!spec || state.offlineDownloading) return;
+    state.offlineDownloading = true;
+    const progWrap = $('offline-dl-progress-wrap');
+    const progFill = $('offline-dl-progress-fill');
+    const progPct = $('offline-dl-progress-pct');
+    if (progWrap) progWrap.classList.remove('hidden');
+    if (progFill) progFill.style.width = '2%';
+    if (progPct) progPct.textContent = '0%';
+    renderOfflineModelPanel();
+    try {
+      await invokeCmd('whisper_download_model', {
+        modelId: spec.id,
+        url: spec.url,
+        filename: spec.filename,
+      });
+      state.offlineStatus = await invokeCmd('whisper_list_models');
+      showToast(`✅ ดาวน์โหลดโมเดล ${spec.filename} สำเร็จ! พร้อมถอดเสียงออฟไลน์ได้ทันที`, 'ok');
+    } catch (err) {
+      showToast(`ดาวน์โหลดโมเดลไม่สำเร็จ: ${err}`, 'err');
+    } finally {
+      state.offlineDownloading = false;
+      if (progWrap) progWrap.classList.add('hidden');
+      renderOfflineModelPanel();
+    }
+  }
+
+  async function deleteSelectedOfflineModel() {
+    const spec = getActiveOfflineModelSpec();
+    if (!spec) return;
+    if (!window.confirm(`ลบไฟล์โมเดล ${spec.filename} ออกจากเครื่องเพื่อคืนพื้นที่ดิสก์?`)) return;
+    try {
+      await invokeCmd('whisper_delete_model', { filename: spec.filename });
+      state.offlineStatus = await invokeCmd('whisper_list_models');
+      showToast(`🗑️ ลบโมเดล ${spec.filename} เรียบร้อยแล้ว`, 'ok');
+    } catch (err) {
+      showToast(`ลบโมเดลไม่สำเร็จ: ${err}`, 'err');
+    } finally {
+      renderOfflineModelPanel();
+    }
+  }
+
+  async function processOfflineLocalItem(item) {
+    const spec = getActiveOfflineModelSpec();
+    if (!spec) throw new Error('ไม่มีโมเดลออฟไลน์ที่เปิดใช้งาน');
+    const autoSaveSrt = $('opt-autosave-srt').checked;
+    const autoSaveVtt = $('opt-autosave-vtt').checked;
+    const maxMins = Number((state.offlineConfig && state.offlineConfig.max_offline_minutes) || 15);
+
+    item.status = 'transcribing';
+    item.progress = 25;
+    item.note = `🆓 กำลังถอดเสียงออฟไลน์ในเครื่อง (${spec.id})...`;
+    renderQueue();
+
+    const res = await invokeCmd('whisper_transcribe_local', {
+      mediaPath: item.path,
+      modelFilename: spec.filename,
+      language: state.lang || 'th',
+      maxMinutes: maxMins,
+    });
+
+    item.costThb = 0;
+    const finalSrt = res.srt || '';
+    const finalVtt = res.vtt || '';
+    if (autoSaveSrt && finalSrt) {
+      const saved = await invokeCmd('save_subtitle_next_to_source', {
+        videoPath: item.path,
+        srtContent: finalSrt,
+        vttContent: finalVtt,
+        saveVtt: autoSaveVtt,
+      });
+      item.srtPath = saved.srt_path;
+      item.vttPath = saved.vtt_path || '';
+    }
+
+    const segs = (res.segments || []).map((s) => ({
+      start: Number(s.start) || 0,
+      end: Number(s.end) || 0,
+      text: String(s.text || ''),
+      secondary_text: '',
+    }));
+
+    item.offlineProject = {
+      id: `offline_${item.id}_${Date.now()}`,
+      name: `${item.name} (เวอร์ชั่นฟรี-ไม่หักเครดิต)`,
+      videoPath: item.path,
+      srtPath: item.srtPath || '',
+      segments: segs,
+      durationSeconds: res.duration_seconds || item.durationSeconds || 0,
+      isOfflineDraft: true,
+    };
+
+    item.status = 'done';
+    item.progress = 100;
+    item.note = `🆓 เสร็จแล้วใน ${res.elapsed_seconds} วิ (${segs.length} บรรทัด • เวอร์ชั่นฟรี-ไม่หักเครดิต)`;
+    renderQueue();
+  }
+
   async function processSingleItem(item) {
+    if (state.plan === 'local-offline') {
+      try {
+        await processOfflineLocalItem(item);
+      } catch (err) {
+        item.status = 'error';
+        item.note = String(err);
+        renderQueue();
+      }
+      return;
+    }
+
     const useLocalExtract = $('opt-extract-local').checked && state.ffmpeg.available && item.isVideo;
     const autoSaveSrt = $('opt-autosave-srt').checked;
     const autoSaveVtt = $('opt-autosave-vtt').checked;
@@ -726,6 +959,27 @@
 
   async function runQueue() {
     if (state.running) return;
+    if (state.plan === 'local-offline') {
+      const spec = getActiveOfflineModelSpec();
+      if (!spec) {
+        showToast('โหมดออฟไลน์ถูกปิดใช้งานชั่วคราวจากเซิร์ฟเวอร์', 'err');
+        return;
+      }
+      if (!isOfflineModelDownloaded(spec.filename)) {
+        showToast(`กรุณากดปุ่ม "⬇️ ดาวน์โหลดโมเดล" (${spec.size_mb || 57} MB) ก่อนเริ่มถอดเสียงออฟไลน์`, 'info');
+        return;
+      }
+      state.running = true; state.stopRequested = false; renderQueue();
+      for (const item of state.queue) {
+        if (state.stopRequested) break;
+        if (item.status !== 'pending' && item.status !== 'error') continue;
+        await processSingleItem(item);
+      }
+      state.running = false; state.stopRequested = false; renderQueue();
+      showToast('✅ ถอดเสียงออฟไลน์เสร็จสิ้น! กดปุ่ม 🎬 Studio เพื่อดูและปรับแก้ซับได้ทันที', 'ok');
+      return;
+    }
+
     if (!state.token || !state.profile) {
       showToast('กรุณาเข้าสู่ระบบก่อนเริ่มถอดเสียง (สมาชิกใหม่รับเครดิตฟรี ฿10!)', 'err');
       $('auth-panel').classList.remove('hidden');
@@ -921,8 +1175,26 @@
         state.plan = card.dataset.plan;
         localStorage.setItem(STORAGE_KEYS.plan, state.plan);
         document.querySelectorAll('.plan-card').forEach((c) => c.classList.toggle('active', c === card));
+        renderOfflineModelPanel();
         renderQueue();
       });
+    });
+
+    $('offline-model-select')?.addEventListener('change', (e) => {
+      state.selectedOfflineModel = e.target.value;
+      renderOfflineModelPanel();
+    });
+    $('offline-download-btn')?.addEventListener('click', downloadSelectedOfflineModel);
+    $('offline-delete-btn')?.addEventListener('click', deleteSelectedOfflineModel);
+    $('offline-refresh-cfg-btn')?.addEventListener('click', async () => {
+      await syncOfflineWhisperConfig();
+      showToast('🔄 อัปเดตสิทธิ์โมเดลจากเซิร์ฟเวอร์แล้ว', 'ok');
+    });
+    $('studio-upsell-close-btn')?.addEventListener('click', () => {
+      $('studio-offline-upsell-bar')?.classList.add('hidden');
+    });
+    $('studio-upgrade-cloud-btn')?.addEventListener('click', () => {
+      $('studio-cloud-ai-btn')?.click();
     });
 
     $('lang-select').addEventListener('change', (e) => { state.lang = e.target.value; localStorage.setItem(STORAGE_KEYS.lang, state.lang); });
@@ -1082,7 +1354,9 @@
       if (btn.dataset.action === 'remove') { state.queue = state.queue.filter((q) => q.id !== item.id); renderQueue(); }
       else if (btn.dataset.action === 'reveal') await invokeCmd('reveal_in_folder', { filePath: item.srtPath || item.path }).catch((err) => showToast(String(err), 'err'));
       else if (btn.dataset.action === 'hardsub') await handleBatchHardsub(item.id);
-      else if (btn.dataset.action === 'studio' && item.jobId) await studio.openProject(item.jobId, item.path);
+      else if (btn.dataset.action === 'studio' && item.offlineProject) {
+        studio.openLocalProject(item.offlineProject);
+      } else if (btn.dataset.action === 'studio' && item.jobId) await studio.openProject(item.jobId, item.path);
     });
 
     $('projects-refresh-btn').addEventListener('click', loadWorkspaceProjects);
@@ -1112,6 +1386,14 @@
     const dropZone = $('drop-zone');
     const tauri = getTauri();
     if (tauri && tauri.event && typeof tauri.event.listen === 'function') {
+      tauri.event.listen('whisper-download-progress', (ev) => {
+        const p = ev && ev.payload ? ev.payload : {};
+        const pct = Math.max(0, Math.min(100, Math.round(Number(p.percent || 0))));
+        const fill = $('offline-dl-progress-fill');
+        const txt = $('offline-dl-progress-pct');
+        if (fill) fill.style.width = `${pct}%`;
+        if (txt) txt.textContent = `${pct}%`;
+      });
       tauri.event.listen('tauri://drag-enter', () => dropZone.classList.add('drag-over'));
       tauri.event.listen('tauri://drag-leave', () => dropZone.classList.remove('drag-over'));
       tauri.event.listen('tauri://drag-drop', async (ev) => {
@@ -1156,6 +1438,7 @@
     await checkLocalFfmpeg();
     localWorkspace.render();
     await refreshProfile(true);
+    await syncOfflineWhisperConfig();
     setTimeout(checkAppUpdateSilent, 2500);
   }
 

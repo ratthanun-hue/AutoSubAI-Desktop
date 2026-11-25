@@ -1336,3 +1336,44 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
   .mt-print-transcript p { margin: 4px 0; }
   .mt-print-transcript .ts { color: #64748b; font-size: 12px; }
 }
+
+/* 1-Step Native Offline Whisper UI (v1.10.0) */
+.plan-card-offline {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(15, 23, 42, 0.72));
+}
+.plan-card-offline.active {
+  border-color: #10b981;
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.45), 0 8px 22px rgba(16, 185, 129, 0.16);
+}
+.offline-model-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.07);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+.offline-model-left,
+.offline-model-actions,
+.offline-dl-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.studio-offline-upsell-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.14), rgba(16, 185, 129, 0.10));
+  border: 1px solid rgba(99, 102, 241, 0.32);
+}

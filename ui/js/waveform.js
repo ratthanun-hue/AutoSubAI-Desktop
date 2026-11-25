@@ -2,17 +2,18 @@
   'use strict';
 
   const HEIGHT_STORAGE_KEY = 'autosub_timeline_height';
+  const FILMSTRIP_STORAGE_KEY = 'autosub_timeline_filmstrip';
   const DEFAULT_HEIGHT = 230;
   const MIN_HEIGHT = 160;
   const MAX_HEIGHT = 420;
 
   /**
-   * CapCut / Premiere-Style 5-Track Resizable Visual Timeline Canvas (v1.5.0):
+   * CapCut / Premiere-Style 5-Track Resizable Visual Timeline Canvas (v1.9.1+p2):
    * - Ruler: Timecode ruler
    * - T5: Watermark & Photo B-Roll / PiP Overlays
    * - T4: Draggable Subtitle Cue Blocks (drag start/end/move)
    * - T3: Draggable Voiceover / Dubbing Clips (live mic + imported audio)
-   * - T2: Audio Waveform + Cut-Out Zones + In/Out + Razor Split Markers [B]
+   * - T2: Video Filmstrip Snapshots (Top) + Audio Waveform (Bottom) + Cut Zones + Razor Split [B]
    * - T1: BGM Audio Track + Auto Audio Ducking Visualizer
    */
   class DesktopWaveformTimeline {
@@ -34,6 +35,21 @@
       this.voiceoverClips = []; // [{ id, start, duration, name, volume }]
       this.bgmInfo = { enabled: false, name: '', auto_ducking: true };
       this.watermarkEnabled = false;
+
+      // Video Filmstrip Snapshots state (T2 top lane, Pure-UI Offscreen Video Extractor)
+      let savedFilm = true;
+      try {
+        const rf = localStorage.getItem(FILMSTRIP_STORAGE_KEY);
+        if (rf === '0' || rf === 'false') savedFilm = false;
+      } catch (_) {}
+      this.filmstripEnabled = savedFilm;
+      this.filmstripFrames = [];    // [{ time: sec, img: HTMLCanvasElement }]
+      this.filmstripLoading = false;
+      this.filmstripProgress = 0;
+      this.hasVideoTrack = false;
+      this._filmstripSrc = '';
+      this._filmstripGenId = 0;
+      this._filmstripVideoEl = null;
 
       // Saved resizable height
       let savedH = DEFAULT_HEIGHT;
@@ -77,15 +93,187 @@
       return next;
     }
 
+    _shouldShowFilmstrip() {
+      return !!(this.filmstripEnabled && this.hasVideoTrack && (this.filmstripFrames.length > 0 || this.filmstripLoading));
+    }
+
+    setFilmstripEnabled(enabled, persist = true) {
+      const next = !!enabled;
+      this.filmstripEnabled = next;
+      if (persist) {
+        try { localStorage.setItem(FILMSTRIP_STORAGE_KEY, next ? '1' : '0'); } catch (_) {}
+      }
+      if (!next) {
+        this._cancelFilmstripExtraction();
+        this.draw();
+      } else if (this._filmstripSrc && this.filmstripFrames.length === 0) {
+        this.extractFilmstripFromUrl(this._filmstripSrc, this.duration);
+      } else {
+        this.draw();
+      }
+      return this.filmstripEnabled;
+    }
+
+    clearFilmstrip() {
+      this._cancelFilmstripExtraction();
+      this.filmstripFrames = [];
+      this.hasVideoTrack = false;
+      this._filmstripSrc = '';
+      this.filmstripProgress = 0;
+      this.draw();
+    }
+
+    _cancelFilmstripExtraction() {
+      this._filmstripGenId += 1;
+      this.filmstripLoading = false;
+      if (this._filmstripVideoEl) {
+        try {
+          this._filmstripVideoEl.pause();
+          this._filmstripVideoEl.removeAttribute('src');
+          this._filmstripVideoEl.load();
+        } catch (_) {}
+        this._filmstripVideoEl = null;
+      }
+    }
+
+    async extractFilmstripFromUrl(srcUrl, durationHint) {
+      const cleanSrc = String(srcUrl || '').trim();
+      if (!cleanSrc) {
+        this.clearFilmstrip();
+        return;
+      }
+      // Avoid redundant re-extraction for the exact same loaded video
+      if (cleanSrc === this._filmstripSrc && (this.filmstripFrames.length > 0 || this.filmstripLoading)) {
+        return;
+      }
+      this._cancelFilmstripExtraction();
+      this._filmstripSrc = cleanSrc;
+      this.filmstripFrames = [];
+      this.filmstripProgress = 0;
+
+      if (!this.filmstripEnabled) {
+        this.hasVideoTrack = true;
+        this.draw();
+        return;
+      }
+
+      const genId = this._filmstripGenId;
+      const vid = document.createElement('video');
+      this._filmstripVideoEl = vid;
+      vid.muted = true;
+      vid.playsInline = true;
+      vid.preload = 'auto';
+      // Set crossOrigin only for remote http(s) URLs so local Tauri asset:// / file:// never fails
+      if (/^https?:\/\//i.test(cleanSrc) && !cleanSrc.startsWith(window.location.origin)) {
+        vid.crossOrigin = 'anonymous';
+      }
+
+      const waitEvent = (el, evName, timeoutMs = 8000) => new Promise((resolve) => {
+        let done = false;
+        const finish = (ok) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          el.removeEventListener(evName, onOk);
+          el.removeEventListener('error', onErr);
+          resolve(ok);
+        };
+        const onOk = () => finish(true);
+        const onErr = () => finish(false);
+        const timer = setTimeout(() => finish(false), timeoutMs);
+        el.addEventListener(evName, onOk, { once: true });
+        el.addEventListener('error', onErr, { once: true });
+      });
+
+      this.hasVideoTrack = true;
+      this.filmstripLoading = true;
+      this.draw();
+
+      try {
+        vid.src = cleanSrc;
+        vid.load();
+        const metaOk = await waitEvent(vid, 'loadedmetadata', 9000);
+        if (genId !== this._filmstripGenId) return;
+
+        const vw = vid.videoWidth || 0;
+        const vh = vid.videoHeight || 0;
+        const dur = (Number.isFinite(vid.duration) && vid.duration > 0) ? vid.duration : (Number(durationHint) || 0);
+        if (!metaOk || vw <= 0 || vh <= 0 || dur <= 0.1) {
+          // Audio-only file (MP3/WAV) or unsupported video codec -> cleanly fall back to full waveform
+          this.hasVideoTrack = false;
+          this.filmstripLoading = false;
+          this.draw();
+          return;
+        }
+
+        const aspect = vw / vh;
+        const thumbW = 128;
+        const thumbH = Math.max(54, Math.min(96, Math.round(thumbW / Math.max(0.5, Math.min(2.4, aspect)))));
+        const count = dur <= 60 ? 16 : (dur <= 600 ? 22 : 28);
+
+        for (let i = 0; i < count; i++) {
+          if (genId !== this._filmstripGenId) return;
+          const targetTime = Math.min(Math.max(0.05, ((i + 0.5) / count) * dur), Math.max(0.05, dur - 0.1));
+          const seekPromise = waitEvent(vid, 'seeked', 3500);
+          try {
+            vid.currentTime = targetTime;
+          } catch (_) {
+            break;
+          }
+          const seekOk = await seekPromise;
+          if (genId !== this._filmstripGenId) return;
+          if (!seekOk) continue;
+
+          try {
+            const tile = document.createElement('canvas');
+            tile.width = thumbW;
+            tile.height = thumbH;
+            const tctx = tile.getContext('2d');
+            if (tctx) {
+              tctx.drawImage(vid, 0, 0, thumbW, thumbH);
+              // Test canvas taint on very first frame
+              if (i === 0) {
+                try { tctx.getImageData(0, 0, 1, 1); } catch (_) { /* still drawable to main 2d canvas */ }
+              }
+              this.filmstripFrames.push({ time: targetTime, img: tile });
+            }
+          } catch (_) {
+            // Stop cleanly if browser blocks canvas drawImage on tainted cross-origin media
+            break;
+          }
+
+          this.filmstripProgress = (i + 1) / count;
+          if (i === 0 || (i + 1) % 2 === 0 || i === count - 1) {
+            this.draw();
+          }
+          // Yield to UI thread so scrubbing/playback remains 60fps
+          await new Promise((r) => setTimeout(r, 12));
+        }
+      } finally {
+        if (genId === this._filmstripGenId) {
+          this.filmstripLoading = false;
+          if (this.filmstripFrames.length === 0) this.hasVideoTrack = false;
+          this.draw();
+        }
+        try {
+          vid.pause();
+          vid.removeAttribute('src');
+          vid.load();
+        } catch (_) {}
+        if (this._filmstripVideoEl === vid) this._filmstripVideoEl = null;
+      }
+    }
+
     _computeLayout() {
       const h = this.height;
       const rulerH = 18;
       const avail = Math.max(120, h - rulerH - 4);
-      const t5H = Math.max(20, Math.round(avail * 0.13));
-      const t4H = Math.max(32, Math.round(avail * 0.24));
-      const t3H = Math.max(26, Math.round(avail * 0.19));
-      const t2H = Math.max(36, Math.round(avail * 0.28));
-      const t1H = Math.max(22, avail - t5H - t4H - t3H - t2H);
+      const showFilm = this._shouldShowFilmstrip();
+      const t5H = Math.max(18, Math.round(avail * (showFilm ? 0.11 : 0.13)));
+      const t4H = Math.max(28, Math.round(avail * (showFilm ? 0.22 : 0.24)));
+      const t3H = Math.max(22, Math.round(avail * (showFilm ? 0.16 : 0.19)));
+      const t2H = Math.max(46, Math.round(avail * (showFilm ? 0.36 : 0.28)));
+      const t1H = Math.max(20, avail - t5H - t4H - t3H - t2H);
 
       let y = rulerH + 1;
       const t5 = { y, hh: t5H, bg: 'rgba(245, 158, 11, 0.04)', label: 'T5 🖼️', key: 't5' }; y += t5H + 1;
@@ -458,12 +646,86 @@
         ctx.fillText('🎙️ Voiceover / เสียงพากย์ (อัดไมค์สดหรือนำเข้าไฟล์ในแท็บ 🎙️ พากย์เสียง • ลากย้ายตำแหน่งได้)', 48, voTop + Math.round(voH * 0.65));
       }
 
-      // === T2: Audio Waveform Peaks ===
-      const waveMid = t2.y + Math.round(t2.hh / 2);
-      const waveAmp = Math.max(14, Math.round((t2.hh - 8) / 2));
+      // === T2: Video Filmstrip Snapshots (Top ~60%) + Audio Waveform Peaks (Bottom ~40%) ===
+      const showFilm = this._shouldShowFilmstrip();
+      const filmH = showFilm ? Math.max(24, Math.round(t2.hh * 0.58)) : 0;
+      const waveTop = showFilm ? (t2.y + filmH + 1) : t2.y;
+      const waveH = Math.max(16, t2.hh - filmH - (showFilm ? 1 : 0));
+
+      if (showFilm) {
+        const filmTop = t2.y + 1;
+        const innerFilmH = Math.max(20, filmH - 2);
+        // Dark filmstrip strip backdrop
+        ctx.fillStyle = '#050914';
+        ctx.fillRect(0, filmTop, w, innerFilmH);
+
+        if (this.filmstripFrames.length > 0 && this.duration > 0) {
+          const tileW = Math.max(38, Math.round(innerFilmH * (16 / 9)));
+          const frames = this.filmstripFrames;
+          for (let x = 0; x < w; x += tileW) {
+            const drawW = Math.min(tileW, w - x);
+            const midT = this._xToTime(x + drawW * 0.5, w);
+            // Nearest extracted frame lookup
+            let best = frames[0];
+            let bestDiff = Math.abs(frames[0].time - midT);
+            for (let fi = 1; fi < frames.length; fi++) {
+              const d = Math.abs(frames[fi].time - midT);
+              if (d < bestDiff) {
+                bestDiff = d;
+                best = frames[fi];
+              }
+            }
+            if (best && best.img) {
+              ctx.save();
+              ctx.beginPath();
+              ctx.rect(x, filmTop, drawW, innerFilmH);
+              ctx.clip();
+              // Cover-crop cleanly inside tile
+              const sw = best.img.width || 128;
+              const sh = best.img.height || 72;
+              const scale = Math.max(drawW / sw, innerFilmH / sh);
+              const dw = sw * scale;
+              const dh = sh * scale;
+              const dx = x + (drawW - dw) / 2;
+              const dy = filmTop + (innerFilmH - dh) / 2;
+              ctx.drawImage(best.img, dx, dy, dw, dh);
+              ctx.restore();
+            }
+            // Subtle film frame separator
+            ctx.fillStyle = 'rgba(2, 6, 23, 0.72)';
+            ctx.fillRect(x + drawW - 1, filmTop, 1, innerFilmH);
+          }
+
+          // Re-tint cut-out zones visibly over filmstrip
+          for (const cz of this.cutZones) {
+            const cx1 = this._timeToX(cz.start, w);
+            const cx2 = this._timeToX(cz.end, w);
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.42)';
+            ctx.fillRect(cx1, filmTop, Math.max(2, cx2 - cx1), innerFilmH);
+          }
+        }
+
+        if (this.filmstripLoading) {
+          const pct = Math.round(this.filmstripProgress * 100);
+          ctx.fillStyle = 'rgba(99, 102, 241, 0.35)';
+          ctx.fillRect(0, filmTop + innerFilmH - 2, Math.round(w * this.filmstripProgress), 2);
+          if (this.filmstripFrames.length < 3) {
+            ctx.fillStyle = 'rgba(226, 232, 240, 0.78)';
+            ctx.font = '10px sans-serif';
+            ctx.fillText(`🎞️ กำลังสร้างภาพตัวอย่างวิดีโอ (${pct}%)...`, 48, filmTop + Math.round(innerFilmH * 0.62));
+          }
+        }
+
+        // Crisp separator between Filmstrip and Audio Waveform
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.22)';
+        ctx.fillRect(0, t2.y + filmH, w, 1);
+      }
+
+      const waveMid = waveTop + Math.round(waveH / 2);
+      const waveAmp = Math.max(7, Math.round((waveH - 4) / 2));
       if (this.peaks.length > 0) {
         const step = w / this.peaks.length;
-        ctx.fillStyle = 'rgba(129, 140, 248, 0.84)';
+        ctx.fillStyle = 'rgba(129, 140, 248, 0.86)';
         for (let i = 0; i < this.peaks.length; i++) {
           const barH = Math.max(2, this.peaks[i] * waveAmp * 2);
           ctx.fillRect(i * step, waveMid - barH / 2, Math.max(1, step - 0.5), barH);

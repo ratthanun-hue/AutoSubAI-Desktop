@@ -3,6 +3,7 @@ mod docx_builder;
 mod ffmpeg_engine;
 mod patch_engine;
 mod tts_engine;
+mod whisper_engine;
 
 use ass_builder::{build_ass_document, CueItem, SubtitleStyleConfig};
 use ffmpeg_engine::{
@@ -1383,6 +1384,47 @@ async fn rollback_ui_patch(app: AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
+async fn whisper_fetch_remote_config(
+    app: AppHandle,
+    api_base: String,
+    token: Option<String>,
+) -> Result<Value, String> {
+    whisper_engine::fetch_remote_config(&app, &api_base, token).await
+}
+
+#[tauri::command]
+async fn whisper_list_models(app: AppHandle) -> Result<whisper_engine::WhisperLocalStatus, String> {
+    whisper_engine::list_local_models(&app).await
+}
+
+#[tauri::command]
+async fn whisper_download_model(
+    app: AppHandle,
+    model_id: String,
+    url: String,
+    filename: String,
+) -> Result<whisper_engine::WhisperDownloadedModel, String> {
+    whisper_engine::download_model(&app, &model_id, &url, &filename).await
+}
+
+#[tauri::command]
+fn whisper_delete_model(app: AppHandle, filename: String) -> Result<bool, String> {
+    whisper_engine::delete_model(&app, &filename)
+}
+
+#[tauri::command]
+async fn whisper_transcribe_local(
+    app: AppHandle,
+    media_path: String,
+    model_filename: String,
+    language: String,
+    max_minutes: Option<u32>,
+) -> Result<whisper_engine::WhisperTranscribeResult, String> {
+    whisper_engine::transcribe_local_file(&app, &media_path, &model_filename, &language, max_minutes)
+        .await
+}
+
+#[tauri::command]
 async fn export_meeting_docx(req: docx_builder::MeetingDocxRequest) -> Result<String, String> {
     docx_builder::write_meeting_docx(&req).await
 }
@@ -1593,6 +1635,11 @@ pub fn run() {
             get_active_ui_patch_bundle,
             confirm_ui_patch_boot,
             rollback_ui_patch,
+            whisper_fetch_remote_config,
+            whisper_list_models,
+            whisper_download_model,
+            whisper_delete_model,
+            whisper_transcribe_local,
         ])
         .run(tauri::generate_context!())
         .expect("error while running AutoSubAI Desktop");

@@ -21,6 +21,8 @@ jobs:
             tauri_args: ""
             ffmpeg_url: "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-win32-x64.gz"
             ffmpeg_dest: "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"
+            whisper_dest: "src-tauri/binaries/whisper-cli-x86_64-pc-windows-msvc.exe"
+            whisper_cmake_args: "-DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF -DWHISPER_BUILD_EXAMPLES=ON"
             verify_exec: true
             artifact_name: AutoSubAI-Windows-x64-AllInOne
           - platform_label: macOS Apple Silicon M1-M4 (aarch64 .dmg — All-in-One)
@@ -29,6 +31,8 @@ jobs:
             tauri_args: "--target aarch64-apple-darwin"
             ffmpeg_url: "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-arm64.gz"
             ffmpeg_dest: "src-tauri/binaries/ffmpeg-aarch64-apple-darwin"
+            whisper_dest: "src-tauri/binaries/whisper-cli-aarch64-apple-darwin"
+            whisper_cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_SHARED_LIBS=OFF -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF -DWHISPER_BUILD_EXAMPLES=ON"
             verify_exec: true
             artifact_name: AutoSubAI-macOS-AppleSilicon-AllInOne
           - platform_label: macOS Intel (x64 .dmg — All-in-One)
@@ -37,6 +41,8 @@ jobs:
             tauri_args: "--target x86_64-apple-darwin"
             ffmpeg_url: "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-x64.gz"
             ffmpeg_dest: "src-tauri/binaries/ffmpeg-x86_64-apple-darwin"
+            whisper_dest: "src-tauri/binaries/whisper-cli-x86_64-apple-darwin"
+            whisper_cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DBUILD_SHARED_LIBS=OFF -DGGML_METAL=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF -DWHISPER_BUILD_EXAMPLES=ON"
             verify_exec: false
             artifact_name: AutoSubAI-macOS-Intel-AllInOne
           - platform_label: Linux x64 (.AppImage & .deb — All-in-One)
@@ -45,6 +51,8 @@ jobs:
             tauri_args: "--bundles deb,appimage"
             ffmpeg_url: "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-linux-x64.gz"
             ffmpeg_dest: "src-tauri/binaries/ffmpeg-x86_64-unknown-linux-gnu"
+            whisper_dest: "src-tauri/binaries/whisper-cli-x86_64-unknown-linux-gnu"
+            whisper_cmake_args: "-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF -DWHISPER_BUILD_EXAMPLES=ON"
             verify_exec: true
             artifact_name: AutoSubAI-Linux-x64-AllInOne
 
@@ -90,6 +98,25 @@ jobs:
             "${{ matrix.ffmpeg_dest }}" -version | head -n 3
           fi
 
+      - name: Build & verify bundled static whisper-cli sidecar (whisper.cpp v1.7.5)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/whisper.cpp
+          git clone --depth 1 --branch v1.7.5 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper.cpp
+          cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build ${{ matrix.whisper_cmake_args }}
+          cmake --build /tmp/whisper.cpp/build --config Release --target whisper-cli -j 4
+          BIN_PATH=$(find /tmp/whisper.cpp/build -type f \( -name "whisper-cli" -o -name "whisper-cli.exe" \) | head -n 1)
+          echo "Built whisper-cli at: $BIN_PATH"
+          test -n "$BIN_PATH"
+          cp "$BIN_PATH" "${{ matrix.whisper_dest }}"
+          chmod +x "${{ matrix.whisper_dest }}"
+          ls -lh "${{ matrix.whisper_dest }}"
+          if [ "${{ matrix.verify_exec }}" = "true" ]; then
+            "${{ matrix.whisper_dest }}" --help | head -n 5 || true
+          fi
+          rm -rf /tmp/whisper.cpp
+
       - name: Install Tauri CLI
         run: npm install
 
@@ -129,27 +156,28 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.9.1-beta Release
+      - name: Create or update desktop-v1.10.0-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.9.1-beta
-          name: "AutoSubAI Desktop Pro Studio v1.9.1 Beta — Hybrid Ed25519 Signed UI Hot-Patch System (<1s Updates)"
+          tag_name: desktop-v1.10.0-beta
+          name: "AutoSubAI Desktop Pro Studio v1.10.0 Beta — 1-Step Native Offline Whisper.cpp + Remote Model Control + T2 Video Filmstrip"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.9.1 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.10.0 Beta)
 
-            ### Downloads (All-in-One with Built-in FFmpeg 6.1.1 & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.9.1_x64-setup.exe` (or `AutoSubAI_1.9.1_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.9.1_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.9.1_x64.dmg`
-            - **🐧 Linux Desktop (x86_64)**: `AutoSubAI_1.9.1_amd64.AppImage` (Universal) or `AutoSubAI_1.9.1_amd64.deb` (Ubuntu / Debian)
+            ### Downloads (All-in-One with Built-in FFmpeg 6.1.1, Static whisper.cpp & Thai Fonts)
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.10.0_x64-setup.exe` (or `AutoSubAI_1.10.0_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4 — Native Metal GPU)**: `AutoSubAI_1.10.0_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.10.0_x64.dmg`
+            - **🐧 Linux Desktop (x86_64)**: `AutoSubAI_1.10.0_amd64.AppImage` (Universal) or `AutoSubAI_1.10.0_amd64.deb` (Ubuntu / Debian)
 
-            ### What's New in v1.9.1 Beta
-            - ⚡ **Hybrid 2-Layer Signed UI Hot-Patch Engine (~220 KB, <1s Updates)**: Future UI features, bug fixes, Meeting Workspace improvements, and i18n updates now deploy as tiny ~220 KB signed patches — update in 1 click inside the app in under 1 second without re-downloading 23–104 MB installers or triggering Windows SmartScreen!
-            - 🔐 **4-Layer Cryptographic Security**: Embedded **Ed25519** signature verification + **SHA-256** digest check + HTTPS allowlist + Zip-Slip path traversal guard + **Zero-Brick Auto-Rollback Watchdog** (both Rust boot counter & 5-second JS crash watchdog).
-            - 🔒 **Includes v1.9.0 Confidential Local-Only Meeting Project Workspace**: All meeting notes, resolutions, speaker tags, and transcripts stay 100% locally on your computer (`AppData/meetings/`).
-            - ⬆️ **Auto-Update**: Existing `v1.8.0` / `v1.9.0` users will immediately see **`⬆️ Update v1.9.1`** in the top bar!
+            ### What's New in v1.10.0 Beta
+            - 🆓 **1-Step Native Offline Whisper (`whisper.cpp`)**: Bundled lightweight static `whisper-cli` (with native Apple Metal GPU on macOS M1–M4 and AVX2 CPU on Windows/Linux). Download models on-demand (`Whisper Base ~57 MB` default) directly inside the app — zero credits, 100% offline!
+            - 🎛️ **Remote Admin Model Control (`GET /v1/desktop/config`)**: Models (`base`, `small`, `large-v3-turbo`), tier gating, and duration limits can be toggled live from `thaiautosub.com` without rebuilding installers.
+            - ⚡ **1-Click Cloud Pro A/B Upgrade Banner**: Instantly compare free local 1-Step Whisper drafts against Cloud Pro (HDemucs + Typhoon-Whisper + 20ms CTC Lip-Sync + 3,248 Thai Drama Lexicon + Master LLM).
+            - 🎞️ **5-Track Visual Timeline Video Filmstrip Snapshots**: CapCut-style live video thumbnails on Track `T2 🎬` with toggle switch and auto-hide for audio-only files.
+            - ⚡ **Includes v1.9.1 Ed25519 Signed UI Hot-Patch Engine & v1.9.0 Local-Only Meeting Workspace**.
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
