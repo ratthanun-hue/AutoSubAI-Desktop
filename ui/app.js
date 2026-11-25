@@ -328,6 +328,9 @@
 
   function renderAuthUI() {
     const authPanel = $('auth-panel');
+    const fqPill = $('free-quota-pill');
+    const fqText = $('free-quota-pill-text');
+    const isEn = window.DesktopI18n && window.DesktopI18n.getLang() === 'en';
     if (state.profile) {
       const email = state.profile.email || 'User';
       const bal = Number(state.profile.credit_balance_thb ?? 0);
@@ -338,11 +341,30 @@
       $('auth-user-bar').classList.remove('hidden');
       $('auth-user-info').textContent = `${email} (฿${bal.toFixed(2)})`;
       authPanel.classList.add('hidden');
+      if (fqPill && fqText) {
+        const tier = (state.profile.plan_tier || 'free').toLowerCase();
+        if (tier === 'free') {
+          const limitSec = Number(state.profile.weekly_free_quota_seconds || 900);
+          const usedSec = Number(state.profile.weekly_free_seconds_used || 0);
+          const remMins = Math.max(0, (limitSec - usedSec) / 60).toFixed(1);
+          const limMins = Math.round(limitSec / 60);
+          fqText.textContent = isEn
+            ? `🎁 Free ${remMins}/${limMins}m (wk)`
+            : `🎁 ถอดเสียงฟรี ${remMins}/${limMins} น.`;
+          fqPill.classList.remove('hidden');
+        } else {
+          fqPill.classList.add('hidden');
+        }
+      }
     } else {
       $('account-btn-label').textContent = window.DesktopI18n.t('btnLogin');
       $('credit-pill').classList.add('hidden');
       $('auth-close-btn').classList.remove('hidden');
       $('auth-user-bar').classList.add('hidden');
+      if (fqPill && fqText) {
+        fqText.textContent = window.DesktopI18n.t('freeQuotaGuest');
+        fqPill.classList.remove('hidden');
+      }
       // Do NOT force open auth-panel on startup so Local Workspace works immediately like CapCut!
     }
     // Reflect Free-Trial Plan-2 Cap on Batch Plan 3 card
@@ -918,6 +940,21 @@
     });
 
     $('account-btn').addEventListener('click', () => $('auth-panel').classList.toggle('hidden'));
+    $('free-quota-pill')?.addEventListener('click', () => {
+      if (!state.profile) {
+        $('auth-panel')?.classList.remove('hidden');
+      } else {
+        refreshProfile(true).then(() => {
+          const isEn = window.DesktopI18n && window.DesktopI18n.getLang() === 'en';
+          showToast(
+            isEn
+              ? '🎁 Free Quota: 15 mins/week on Plan 1 (max 5 mins/file, resets every 7 days)'
+              : '🎁 โควตาถอดเสียงฟรี 15 นาที/สัปดาห์ (Plan 1 • สูงสุด 5 น./ไฟล์ • รีเซ็ตทุก 7 วัน)',
+            'info'
+          );
+        });
+      }
+    });
     $('auth-close-btn').addEventListener('click', () => $('auth-panel').classList.add('hidden'));
     $('credit-pill').addEventListener('click', async () => { await refreshProfile(true); showToast('Credit balance refreshed', 'ok'); });
     $('logout-btn').addEventListener('click', () => {

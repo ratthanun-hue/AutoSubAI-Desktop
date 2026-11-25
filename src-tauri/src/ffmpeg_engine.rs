@@ -250,6 +250,8 @@ fn find_bundled_ffmpeg() -> Option<String> {
         dir.join("ffmpeg"),
         dir.join("binaries").join("ffmpeg-aarch64-apple-darwin"),
         dir.join("binaries").join("ffmpeg-x86_64-apple-darwin"),
+        dir.join("binaries").join("ffmpeg-x86_64-unknown-linux-gnu"),
+        dir.join("binaries").join("ffmpeg-aarch64-unknown-linux-gnu"),
     ];
 
     for cand in candidates {
@@ -284,6 +286,11 @@ pub fn resolve_ffmpeg_binary() -> Option<(String, bool)> {
     #[cfg(target_os = "macos")]
     {
         candidates.push("/opt/homebrew/bin/ffmpeg".to_string());
+        candidates.push("/usr/local/bin/ffmpeg".to_string());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        candidates.push("/usr/bin/ffmpeg".to_string());
         candidates.push("/usr/local/bin/ffmpeg".to_string());
     }
     #[cfg(target_os = "windows")]

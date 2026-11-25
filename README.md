@@ -1,13 +1,13 @@
 # AutoSubAI Desktop Pro Studio
 
-Native Desktop Pro NLE, AI Voiceover Dubbing, Secretary Meeting Minutes & Drama Subtitling Studio (Tauri v2 + Built-in FFmpeg 6.1.1 + Thai Fonts) for **Windows 10/11** and **macOS (Apple Silicon M1–M4 & Intel)** — **100% Local Video Finishing (0% Server Load)** with 1-Click Cloud AI Transcription via [thaiautosub.com](https://www.thaiautosub.com).
+Native Desktop Pro NLE, AI Voiceover Dubbing, Secretary Meeting Minutes & Drama Subtitling Studio (Tauri v2 + Built-in FFmpeg 6.1.1 + Thai Fonts) for **Windows 10/11**, **macOS (Apple Silicon M1–M4 & Intel)**, and **🐧 Linux x64 (`.AppImage` & `.deb`)** — **100% Local Video Finishing (0% Server Load)** with **🎁 Free 15 mins/week AI Transcription** (≤5 mins/file + ฿10 welcome credit) via [thaiautosub.com](https://www.thaiautosub.com).
 
 ![AutoSubAI Desktop Pro Studio Overview](docs/images/03-nle-3pane-overview.png)
 
 ---
 
-## ⬇️ Downloads & 📖 Visual User Guide (v1.7.2 Pro Studio)
-- **Latest Installers (Windows `.exe`/`.msi`, macOS Apple Silicon & Intel `.dmg`)**: **[GitHub Releases (Latest)](https://github.com/ratthanun-hue/AutoSubAI-Desktop/releases/latest)**
+## ⬇️ Downloads & 📖 Visual User Guide (v1.8.0 Pro Studio)
+- **Latest Installers (Windows `.exe`/`.msi`, macOS Apple Silicon & Intel `.dmg`, Linux `.AppImage`/`.deb`)**: **[GitHub Releases (Latest)](https://github.com/ratthanun-hue/AutoSubAI-Desktop/releases/latest)**
 - **📖 คู่มือการใช้งานพร้อมภาพประกอบ (Web + พิมพ์เป็น PDF)**: **[https://www.thaiautosub.com/guide](https://www.thaiautosub.com/guide)**
 - **📘 GitHub User Guide (Thai + Annotated Screenshots)**: **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**
 

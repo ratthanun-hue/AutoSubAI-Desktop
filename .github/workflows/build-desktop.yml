@@ -39,12 +39,26 @@ jobs:
             ffmpeg_dest: "src-tauri/binaries/ffmpeg-x86_64-apple-darwin"
             verify_exec: false
             artifact_name: AutoSubAI-macOS-Intel-AllInOne
+          - platform_label: Linux x64 (.AppImage & .deb — All-in-One)
+            os: ubuntu-22.04
+            rust_target: ""
+            tauri_args: "--bundles deb,appimage"
+            ffmpeg_url: "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-linux-x64.gz"
+            ffmpeg_dest: "src-tauri/binaries/ffmpeg-x86_64-unknown-linux-gnu"
+            verify_exec: true
+            artifact_name: AutoSubAI-Linux-x64-AllInOne
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install Linux Tauri v2 dependencies (WebKitGTK & AppImage tools)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -89,7 +103,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p release_files
-          find src-tauri/target -type f -path "*/bundle/*" \( -name "*.exe" -o -name "*.msi" -o -name "*.dmg" \) \
+          find src-tauri/target -type f -path "*/bundle/*" \( -name "*.exe" -o -name "*.msi" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" \) \
             ! -path "*/debug/*" \
             -exec cp -v {} release_files/ \;
           ls -lh release_files/
@@ -115,26 +129,27 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.7.2-beta Release
+      - name: Create or update desktop-v1.8.0-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.7.2-beta
-          name: "AutoSubAI Desktop Pro Studio v1.7.2 Beta — Edge Neural TTS v2 Fix, Google Thai Fallback & 1-Click T3 Voice Preview"
+          tag_name: desktop-v1.8.0-beta
+          name: "AutoSubAI Desktop Pro Studio v1.8.0 Beta — Linux Desktop Support, 100% EN/TH i18n & Live Free Transcription Quota"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.7.2 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.8.0 Beta)
 
             ### Downloads (All-in-One with Built-in FFmpeg 6.1.1 & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.7.2_x64-setup.exe` (or `AutoSubAI_1.7.2_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.7.2_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.7.2_x64.dmg`
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.8.0_x64-setup.exe` (or `AutoSubAI_1.8.0_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.8.0_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.8.0_x64.dmg`
+            - **🐧 Linux Desktop (x86_64 — NEW!)**: `AutoSubAI_1.8.0_amd64.AppImage` (Universal) or `AutoSubAI_1.8.0_amd64.deb` (Ubuntu / Debian)
 
-            ### What's Fixed & New in v1.7.2 Beta
-            - 🗣️ **Fixed Silent AI Text-to-Voice Dubbing (Edge Neural TTS Protocol v2)**: Upgraded `Sec-MS-GEC` handshake to Microsoft Edge **v2 (`2-143.0.3650.75` + `Cookie: muid`)**, restoring crystal-clear Thai Neural voices (**Premwadee / Niwat**) and 6 international voices with zero `403 Forbidden` failures!
-            - 🛡️ **Automatic Tier-2 Google Thai/Multi-Lang TTS Fallback & Silent-WAV Guard**: Added automatic Google TTS fallback + strict `>= 2 KB` WAV audio validation so Windows machines without Thai SAPI voices can never produce silent 78-byte placeholder files.
-            - ▶️ **1-Click `▶ ฟัง` Voiceover Audition & Instant Play Sync**: Added a direct `▶ ฟัง` / `⏹️ หยุด` preview button on every T3 voiceover clip plus instant playback sync when clicking Play on the studio monitor.
-            - ⬆️ **Auto-Update**: Existing `v1.7.1` users will immediately see **`⬆️ Update v1.7.2`** in the top bar!
+            ### What's New in v1.8.0 Beta
+            - 🐧 **Native Linux Desktop Support (`.AppImage` & `.deb`)**: Full Tauri v2 Linux build with bundled static FFmpeg 6.1.1, Thai fonts, Edge Neural v2 / Google AI TTS, and Smart Auto-Updater!
+            - 🌐 **100% Complete English (`EN`) & Thai (`TH`) Localization**: Every new feature — AI Text-to-Voice Dubbing, 5-Track `T3/T2/T1` Solo/Mute Monitor, Secretary Meeting Minutes Mode & 2-Line Karaoke, Cloud AI Modal, Feedback Modal, and Free Quota badges — now switches seamlessly between Thai and English!
+            - 🎁 **Live Free Transcription Quota Meter (`15 Mins/Week • Max 5 Mins/File`)**: Clear topbar pill & Plan 1 `FREE ฿0` badges showing your live remaining weekly free transcription minutes (auto-resets every 7 days) alongside your `฿10` welcome credit!
+            - ⬆️ **Auto-Update**: Existing `v1.7.x` users will immediately see **`⬆️ Update v1.8.0`** in the top bar!
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -90,11 +90,14 @@
     toggleTrackSolo(key) {
       this.trackMonitor.solo = this.trackMonitor.solo === key ? null : key;
       this._syncMonitorUi();
-      const names = { t3: 'T3 เสียงพากย์', t2: 'T2 เสียงต้นฉบับ', t1: 'T1 เพลง BGM' };
+      const isEn = window.DesktopI18n && window.DesktopI18n.getLang() === 'en';
+      const names = isEn
+        ? { t3: 'T3 Voiceover', t2: 'T2 Original Audio', t1: 'T1 BGM' }
+        : { t3: 'T3 เสียงพากย์', t2: 'T2 เสียงต้นฉบับ', t1: 'T1 เพลง BGM' };
       this.host.showToast(
         this.trackMonitor.solo
-          ? `🎧 Solo: ฟังเฉพาะ ${names[key]} ล้วนๆ (เฉพาะพรีวิว)`
-          : '🔊 คืนค่าฟังเสียงรวมทุกแทร็กแล้ว',
+          ? (isEn ? `🎧 Solo: Listening to ${names[key]} only (Preview)` : `🎧 Solo: ฟังเฉพาะ ${names[key]} ล้วนๆ (เฉพาะพรีวิว)`)
+          : (isEn ? '🔊 Restored full audio mix (all tracks)' : '🔊 คืนค่าฟังเสียงรวมทุกแทร็กแล้ว'),
         'info'
       );
     }
@@ -111,7 +114,11 @@
       this.trackMonitor.solo = null;
       this.trackMonitor.mute = { t3: false, t2: false, t1: false };
       this._syncMonitorUi();
-      this.host.showToast('🔊 ฟังเสียงรวมครบทุกแทร็ก (T3 + T2 + T1)', 'info');
+      const isEn = window.DesktopI18n && window.DesktopI18n.getLang() === 'en';
+      this.host.showToast(
+        isEn ? '🔊 Monitoring full mix (T3 + T2 + T1)' : '🔊 ฟังเสียงรวมครบทุกแทร็ก (T3 + T2 + T1)',
+        'info'
+      );
     }
 
     _syncMonitorUi() {
@@ -201,8 +208,9 @@
           try { c.audioEl.pause(); } catch (_) {}
         }
       }
+      const playLbl = window.DesktopI18n ? window.DesktopI18n.t('voPlayClip') : '▶ ฟัง';
       document.querySelectorAll('[data-vo-play]').forEach((b) => {
-        b.textContent = '▶ ฟัง';
+        b.textContent = playLbl;
       });
     }
 
@@ -214,8 +222,9 @@
         a.addEventListener('ended', () => {
           if (this.auditioningVoId === clip.id) {
             this.auditioningVoId = null;
+            const playLbl = window.DesktopI18n ? window.DesktopI18n.t('voPlayClip') : '▶ ฟัง';
             document.querySelectorAll('[data-vo-play]').forEach((b) => {
-              b.textContent = '▶ ฟัง';
+              b.textContent = playLbl;
             });
           }
         });
@@ -243,12 +252,14 @@
       a.volume = Math.max(0.05, Math.min(1.0, Number(clip.volume) || 1.0));
       try { a.currentTime = 0; } catch (_) {}
       const btn = document.querySelector(`[data-vo-play="${idx}"]`);
-      if (btn) btn.textContent = '⏹️ หยุด';
+      const playLbl = window.DesktopI18n ? window.DesktopI18n.t('voPlayClip') : '▶ ฟัง';
+      const stopLbl = window.DesktopI18n ? window.DesktopI18n.t('voStopClip') : '⏹️ หยุด';
+      if (btn) btn.textContent = stopLbl;
       const p = a.play();
       if (p && typeof p.catch === 'function') {
         p.catch((err) => {
           this.auditioningVoId = null;
-          if (btn) btn.textContent = '▶ ฟัง';
+          if (btn) btn.textContent = playLbl;
           this.host.showToast(`ไม่สามารถเล่นเสียงพากย์ได้: ${err.message || err}`, 'err');
         });
       }
@@ -645,12 +656,14 @@
         box.innerHTML = '<div class="muted" style="font-size:11px;">ยังไม่มีเสียงพากย์ — เลื่อน Playhead ไปจุดที่ต้องการ แล้วกดอัดไมค์สด หรือนำเข้าไฟล์เสียง</div>';
         return;
       }
+      const playLbl = window.DesktopI18n ? window.DesktopI18n.t('voPlayClip') : '▶ ฟัง';
+      const stopLbl = window.DesktopI18n ? window.DesktopI18n.t('voStopClip') : '⏹️ หยุด';
       box.innerHTML = this.voiceover.clips
         .map((c, i) => `
           <div class="vo-clip-row">
             <div class="vo-clip-top">
               <button type="button" class="broll-seek" data-vo-seek="${c.start}">🎙️ ${escapeHtml(c.name)}</button>
-              <button type="button" class="btn btn-secondary btn-xs" data-vo-play="${i}" title="กดลองฟังเสียงพากย์ท่อนนี้ทันที">${this.auditioningVoId === c.id ? '⏹️ หยุด' : '▶ ฟัง'}</button>
+              <button type="button" class="btn btn-secondary btn-xs" data-vo-play="${i}" title="Preview clip">${this.auditioningVoId === c.id ? stopLbl : playLbl}</button>
               <span class="mono-tag">${fmtSec(c.start)} (${Number(c.duration || 0).toFixed(1)}s)</span>
               <button type="button" class="btn btn-danger-ghost btn-xs" data-vo-del="${i}">✕</button>
             </div>

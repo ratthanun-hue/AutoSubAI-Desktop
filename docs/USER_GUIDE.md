@@ -1,8 +1,8 @@
-# 📖 คู่มือการใช้งาน AutoSubAI Desktop Pro Studio (v1.7.2)
+# 📖 คู่มือการใช้งาน AutoSubAI Desktop Pro Studio (v1.8.0)
 
 > 🌐 **อ่านเวอร์ชันเว็บสวยหรู (พร้อมค้นหา & พิมพ์เป็น PDF ได้ใน 1 คลิก)**: **[https://www.thaiautosub.com/guide](https://www.thaiautosub.com/guide)**
 
-**AutoSubAI Desktop Pro Studio** คือโปรแกรมตัดต่อวิดีโอ พากย์เสียง AI ทำซับไตเติล และสรุปรายงานการประชุมภาษาไทย-ต่างประเทศแบบครบวงจรบน Windows และ macOS มาพร้อมเอนจิน FFmpeg 6.1.1 และฟอนต์ไทย (`Prompt`, `Kanit`, `Sarabun`) ในตัว ใช้งาน **Local Workspace + พากย์เสียง AI ฟรี 100% บนเครื่องคุณ (0% โหลดเซิร์ฟเวอร์)** และเชื่อมต่อระบบถอดเสียง AI จาก [thaiautosub.com](https://www.thaiautosub.com) ได้ในคลิกเดียว
+**AutoSubAI Desktop Pro Studio** คือโปรแกรมตัดต่อวิดีโอ พากย์เสียง AI ทำซับไตเติล และสรุปรายงานการประชุมภาษาไทย-ต่างประเทศแบบครบวงจรบน **Windows, macOS และ Linux** รองรับภาษาแอปครบ **ไทย (`TH`) / อังกฤษ (`EN`) 100%** มาพร้อมเอนจิน FFmpeg 6.1.1 และฟอนต์ไทย (`Prompt`, `Kanit`, `Sarabun`) ในตัว ใช้งาน **Local Workspace + พากย์เสียง AI ฟรี 100% บนเครื่องคุณ** พร้อมสิทธิ์ **🎁 ถอดเสียง AI ฟรี 15 นาที/สัปดาห์ (สูงสุด 5 นาที/ไฟล์) + เครดิตต้อนรับ ฿10** จาก [thaiautosub.com](https://www.thaiautosub.com)
 
 ---
 
@@ -27,6 +27,7 @@
 - **Windows 10 / 11 (64-bit)**: `AutoSubAI_*_x64-setup.exe` (แนะนำ) หรือ `.msi`
 - **macOS Apple Silicon (M1–M4)**: `AutoSubAI_*_aarch64.dmg`
 - **macOS Intel (x64)**: `AutoSubAI_*_x64.dmg`
+- **🐧 Linux Desktop (x64)**: `AutoSubAI_*_amd64.AppImage` (รันได้ทุก Distro) หรือ `AutoSubAI_*_amd64.deb` (Ubuntu / Debian)
 
 **Smart Auto-Updater**: เมื่อมีเวอร์ชันใหม่ แอปจะแสดงปุ่ม **`⬆️ Update v1.x.x`** บนแถบมุมขวาบนโดยอัตโนมัติ กด 1 คลิกเพื่อดาวน์โหลดและติดตั้งทับได้ทันทีโดยโปรเจกต์เดิมไม่หาย และสามารถส่งข้อเสนอแนะหรือขอฟีเจอร์ใหม่ผ่านปุ่ม **`💬 แนะนำฟีเจอร์`** บนแถบด้านบนได้ตลอดเวลา
 

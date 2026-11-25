@@ -1006,7 +1006,11 @@ fn asset_matches_platform(name: &str) -> bool {
     {
         return lower.ends_with("_x64.dmg") || lower.ends_with("_universal.dmg");
     }
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    #[cfg(target_os = "linux")]
+    {
+        return lower.ends_with(".appimage") || lower.ends_with("_amd64.deb");
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
         let _ = lower;
         false
@@ -1152,6 +1156,22 @@ async fn download_and_launch_update(
             .arg(&dest)
             .spawn()
             .map_err(|e| format!("เปิดไฟล์ .dmg ไม่สำเร็จ: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if safe_name.to_lowercase().ends_with(".appimage") {
+            let _ = std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755));
+            std::process::Command::new(&dest)
+                .spawn()
+                .map_err(|e| format!("เปิดไฟล์ .AppImage ไม่สำเร็จ: {}", e))?;
+        } else {
+            let parent = dest.parent().unwrap_or_else(|| Path::new("/tmp"));
+            std::process::Command::new("xdg-open")
+                .arg(parent)
+                .spawn()
+                .map_err(|e| format!("เปิดโฟลเดอร์ไฟล์อัปเดตไม่สำเร็จ: {}", e))?;
+        }
     }
 
     Ok(dest_str)
