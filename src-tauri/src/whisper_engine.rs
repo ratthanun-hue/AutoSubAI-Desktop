@@ -169,9 +169,9 @@ fn default_offline_policy() -> Value {
                 "label_en": "Voice Model (Free Version)",
                 "desc_th": "เวอร์ชั่นฟรี-ไม่หักเครดิต",
                 "desc_en": "Free Version — 0 Credits",
-                "filename": "ggml-base-q5_1.bin",
-                "size_mb": 57,
-                "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin",
+                "filename": "ggml-base.bin",
+                "size_mb": 148,
+                "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
                 "allowed_tiers": ["free", "payg", "creator", "pro"]
             }
         ],
@@ -446,12 +446,89 @@ fn build_srt_vtt(segments: &[WhisperSegment]) -> (String, String, String) {
     (srt, vtt, plain.join("\n"))
 }
 
+fn clean_hallucination_text(raw: &str) -> String {
+    let mut s = raw
+        .replace("[เสียงดนตรี]", "")
+        .replace("(เสียงดนตรี)", "")
+        .replace("[ดนตรี]", "")
+        .replace("(ดนตรี)", "")
+        .replace("[เสียงเพลง]", "")
+        .replace("(เสียงเพลง)", "")
+        .replace("[เพลง]", "")
+        .replace("(เพลง)", "")
+        .replace("[เสียงปรบมือ]", "")
+        .replace("(เสียงปรบมือ)", "")
+        .replace("[เสียงหัวเราะ]", "")
+        .replace("(เสียงหัวเราะ)", "")
+        .replace("[เสียงรบกวน]", "")
+        .replace("[BLANK_AUDIO]", "")
+        .replace("[blank_audio]", "")
+        .replace("[SILENCE]", "")
+        .replace("(SILENCE)", "")
+        .replace("[silence]", "")
+        .replace("(silence)", "")
+        .replace("[MUSIC]", "")
+        .replace("(MUSIC)", "")
+        .replace("[Music]", "")
+        .replace("(Music)", "")
+        .replace("[music]", "")
+        .replace("(music)", "")
+        .replace("[APPLAUSE]", "")
+        .replace("[Applause]", "")
+        .replace('♪', "")
+        .replace('♫', "")
+        .replace('♬', "")
+        .trim()
+        .to_string();
+
+    // Collapse multiple spaces left behind after stripping inline tags
+    while s.contains("  ") {
+        s = s.replace("  ", " ");
+    }
+    s.trim().to_string()
+}
+
+fn is_non_speech_only(text: &str) -> bool {
+    let t = text.trim();
+    if t.is_empty() {
+        return true;
+    }
+    // Pure bracketed/parenthesized sound-effect tag e.g. "[...]" or "(...)"
+    if (t.starts_with('[') && t.ends_with(']')) || (t.starts_with('(') && t.ends_with(')')) {
+        let inner = &t[1..t.len().saturating_sub(1)];
+        if !inner.contains('[') && !inner.contains('(') && inner.chars().count() <= 40 {
+            return true;
+        }
+    }
+    let lower = t.to_lowercase();
+    matches!(
+        lower.as_str(),
+        "เสียงดนตรี"
+            | "ดนตรี"
+            | "เสียงเพลง"
+            | "เพลง"
+            | "เพลงประกอบ"
+            | "เสียงปรบมือ"
+            | "เสียงหัวเราะ"
+            | "music"
+            | "applause"
+            | "silence"
+            | "blank_audio"
+            | "..."
+            | "."
+            | "-"
+    )
+}
+
 fn parse_whisper_json_segments(val: &Value) -> Vec<WhisperSegment> {
-    let mut out = Vec::new();
+    let mut out: Vec<WhisperSegment> = Vec::new();
     let arr = match val.get("transcription").and_then(|v| v.as_array()) {
         Some(a) => a,
         None => return out,
     };
+
+    let mut last_norm = String::new();
+    let mut repeat_run: usize = 0;
 
     for item in arr {
         let raw_text = item
@@ -462,10 +539,22 @@ fn parse_whisper_json_segments(val: &Value) -> Vec<WhisperSegment> {
         if raw_text.is_empty() {
             continue;
         }
-        // Skip whisper.cpp non-speech markers like [BLANK_AUDIO] or (silence)
-        let upper = raw_text.to_uppercase();
-        if upper == "[BLANK_AUDIO]" || upper == "(SILENCE)" || upper == "[SILENCE]" {
+
+        let cleaned = clean_hallucination_text(raw_text);
+        if is_non_speech_only(&cleaned) {
             continue;
+        }
+
+        // Guard against consecutive repetition loops (>2 identical lines in a row)
+        let norm = cleaned.to_lowercase();
+        if norm == last_norm {
+            repeat_run += 1;
+            if repeat_run >= 2 {
+                continue;
+            }
+        } else {
+            last_norm = norm;
+            repeat_run = 0;
         }
 
         let start_ms = item
@@ -485,7 +574,7 @@ fn parse_whisper_json_segments(val: &Value) -> Vec<WhisperSegment> {
         out.push(WhisperSegment {
             start: (start * 1000.0).round() / 1000.0,
             end: (end * 1000.0).round() / 1000.0,
-            text: raw_text.to_string(),
+            text: cleaned,
         });
     }
     out
@@ -541,17 +630,18 @@ pub async fn transcribe_local_file(
         ));
     }
 
-    // Step 1A: Convert input media to 16kHz mono PCM WAV via bundled FFmpeg
+    // Step 1A: Convert input media to 16kHz mono PCM WAV with Voice Pre-Filter
+    // (bandpass 80Hz..7800Hz + dynaudnorm lifts quiet Thai speech above background music)
     let stamp = format!("{}_{}", std::process::id(), now_unix_secs());
     let temp_dir = std::env::temp_dir();
     let wav_path = temp_dir.join(format!("autosub_wcpp_{}.wav", stamp));
     let out_prefix = temp_dir.join(format!("autosub_wcpp_out_{}", stamp));
     let out_json_path = temp_dir.join(format!("autosub_wcpp_out_{}.json", stamp));
 
+    let max_sec_str = (limit_mins * 60).to_string();
     let mut ff_cmd = Command::new(&ffmpeg_info.path);
     #[cfg(target_os = "windows")]
     ff_cmd.creation_flags(0x08000000);
-    let max_sec_str = (limit_mins * 60).to_string();
     let ff_out = ff_cmd
         .args([
             "-y",
@@ -560,6 +650,8 @@ pub async fn transcribe_local_file(
             "-t",
             &max_sec_str,
             "-vn",
+            "-af",
+            "highpass=f=80,lowpass=f=7800,dynaudnorm=f=150:g=15",
             "-ar",
             "16000",
             "-ac",
@@ -572,12 +664,43 @@ pub async fn transcribe_local_file(
         .await
         .map_err(|e| format!("รัน FFmpeg สกัดเสียงไม่สำเร็จ: {}", e))?;
 
+    // Fallback without -af if any exotic media stream rejects the audio filtergraph
     if !ff_out.status.success() || !wav_path.is_file() {
-        let _ = tokio::fs::remove_file(&wav_path).await;
-        return Err("สกัดเสียง 16kHz WAV ไม่สำเร็จ ไฟล์อาจเสียหายหรือไม่มีแทร็กเสียง".to_string());
+        let mut ff_fallback = Command::new(&ffmpeg_info.path);
+        #[cfg(target_os = "windows")]
+        ff_fallback.creation_flags(0x08000000);
+        let fb_out = ff_fallback
+            .args([
+                "-y",
+                "-i",
+                media_path,
+                "-t",
+                &max_sec_str,
+                "-vn",
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
+                "-c:a",
+                "pcm_s16le",
+                &wav_path.to_string_lossy(),
+            ])
+            .output()
+            .await
+            .map_err(|e| format!("รัน FFmpeg สกัดเสียงไม่สำเร็จ: {}", e))?;
+        if !fb_out.status.success() || !wav_path.is_file() {
+            let _ = tokio::fs::remove_file(&wav_path).await;
+            return Err("สกัดเสียง 16kHz WAV ไม่สำเร็จ ไฟล์อาจเสียหายหรือไม่มีแทร็กเสียง".to_string());
+        }
     }
 
     // Step 1B: Run single-step whisper.cpp (`whisper-cli`) -> JSON output
+    // Critical anti-hallucination flags:
+    //   -mc 0   : disable cross-window text context (prevents [เสียงดนตรี] infinite loop!)
+    //   -sns    : suppress non-speech tokens (music/applause tags)
+    //   -et 2.4 : entropy threshold to break repetitive decoder loops
+    //   -tp 0.0 -tpi 0.2 : greedy start + automatic temperature fallback
+    //   --no-speech-thold 0.50 : balanced non-speech gating
     let lang_clean = match language.trim().to_lowercase().as_str() {
         "th" | "en" | "zh" | "ja" | "ko" | "auto" => language.trim().to_lowercase(),
         _ => "th".to_string(),
@@ -600,8 +723,17 @@ pub async fn transcribe_local_file(
             &lang_clean,
             "-t",
             &threads,
+            "-mc",
+            "0",
+            "-sns",
+            "-et",
+            "2.4",
+            "-tp",
+            "0.0",
+            "-tpi",
+            "0.2",
             "--no-speech-thold",
-            "0.65",
+            "0.50",
             "-oj",
             "-of",
             &out_prefix.to_string_lossy(),
@@ -635,6 +767,12 @@ pub async fn transcribe_local_file(
         .map_err(|e| format!("แปลงผลลัพธ์ JSON จาก whisper.cpp ไม่สำเร็จ: {}", e))?;
 
     let segments = parse_whisper_json_segments(&parsed);
+    if segments.is_empty() {
+        return Err(
+            "ไม่พบเสียงพูดที่ชัดเจนในไฟล์นี้ (อาจมีเสียงดนตรีดังกว่าเสียงพูดหรือไฟล์เงียบ) — สามารถเลือกใช้ Cloud AI ที่มีระบบแยกเสียงดนตรีเพิ่มเติมได้ครับ"
+                .to_string(),
+        );
+    }
     let (srt, vtt, text) = build_srt_vtt(&segments);
     let elapsed = (t_start.elapsed().as_secs_f64() * 100.0).round() / 100.0;
 

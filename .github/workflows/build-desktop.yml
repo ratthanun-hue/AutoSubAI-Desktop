@@ -156,28 +156,27 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.10.0-beta Release
+      - name: Create or update desktop-v1.10.1-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.10.0-beta
-          name: "AutoSubAI Desktop Pro Studio v1.10.0 Beta — 1-Step Native Offline Whisper.cpp + Remote Model Control + T2 Video Filmstrip"
+          tag_name: desktop-v1.10.1-beta
+          name: "AutoSubAI Desktop Pro Studio v1.10.1 Beta — Anti-Hallucination Local Voice Engine + Full Base Model (148 MB)"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.10.0 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.10.1 Beta)
 
             ### Downloads (All-in-One with Built-in FFmpeg 6.1.1, Static whisper.cpp & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.10.0_x64-setup.exe` (or `AutoSubAI_1.10.0_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4 — Native Metal GPU)**: `AutoSubAI_1.10.0_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.10.0_x64.dmg`
-            - **🐧 Linux Desktop (x86_64)**: `AutoSubAI_1.10.0_amd64.AppImage` (Universal) or `AutoSubAI_1.10.0_amd64.deb` (Ubuntu / Debian)
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.10.1_x64-setup.exe` (or `AutoSubAI_1.10.1_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4 — Native Metal GPU)**: `AutoSubAI_1.10.1_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.10.1_x64.dmg`
+            - **🐧 Linux Desktop (x86_64)**: `AutoSubAI_1.10.1_amd64.AppImage` (Universal) or `AutoSubAI_1.10.1_amd64.deb` (Ubuntu / Debian)
 
-            ### What's New in v1.10.0 Beta
-            - 🆓 **1-Step Native Offline Whisper (`whisper.cpp`)**: Bundled lightweight static `whisper-cli` (with native Apple Metal GPU on macOS M1–M4 and AVX2 CPU on Windows/Linux). Download models on-demand (`Whisper Base ~57 MB` default) directly inside the app — zero credits, 100% offline!
-            - 🎛️ **Remote Admin Model Control (`GET /v1/desktop/config`)**: Models (`base`, `small`, `large-v3-turbo`), tier gating, and duration limits can be toggled live from `thaiautosub.com` without rebuilding installers.
-            - ⚡ **1-Click Cloud Pro A/B Upgrade Banner**: Instantly compare free local 1-Step Whisper drafts against Cloud Pro (HDemucs + Typhoon-Whisper + 20ms CTC Lip-Sync + 3,248 Thai Drama Lexicon + Master LLM).
-            - 🎞️ **5-Track Visual Timeline Video Filmstrip Snapshots**: CapCut-style live video thumbnails on Track `T2 🎬` with toggle switch and auto-hide for audio-only files.
-            - ⚡ **Includes v1.9.1 Ed25519 Signed UI Hot-Patch Engine & v1.9.0 Local-Only Meeting Workspace**.
+            ### What's New in v1.10.1 Beta
+            - 🛡️ **Fixed `[เสียงดนตรี]` Hallucination Loop**: Added `-mc 0` (disable cross-window context loops), `-sns` (suppress non-speech tags), `-et 2.4` + `-tp 0.0 -tpi 0.2`, FFmpeg Voice Pre-Filter (`highpass=80Hz, lowpass=7800Hz, dynaudnorm`), and Thai/EN non-speech & repetition Post-Filter.
+            - 🎯 **Upgraded Free Local Model to Full Unquantized `ggml-base.bin` (~148 MB)** for dramatically better Thai speech detection over background music (controlled live via `/v1/desktop/config`).
+            - 🏷️ **Clean Thai Brand Labels**: Displays `โมเดลถอดเสียง (เวอร์ชั่นฟรี)` / `เวอร์ชั่นฟรี-ไม่หักเครดิต` directly out of the box.
+            - 🎞️ **Includes T2 Video Filmstrip Snapshots, Ed25519 Signed UI Hot-Patch Engine & Local-Only Meeting Workspace**.
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
