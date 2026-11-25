@@ -667,8 +667,12 @@
       engBadge.classList.toggle('pill-ok', ok);
       engBadge.classList.toggle('pill-warn', !ok);
       engBadge.textContent = ok
-        ? `💻 ออฟไลน์ในเครื่อง (≤${maxMins} น./ไฟล์)`
-        : '💻 ออฟไลน์ในเครื่อง (เวอร์ชั่นฟรี-ไม่หักเครดิต)';
+        ? (isEn
+            ? `💻 Offline Free Forever • Unlimited Files (≤${maxMins}m/file)`
+            : `💻 ฟรีตลอดชีพ • ไม่จำกัดจำนวนไฟล์ (≤${maxMins} น./ไฟล์)`)
+        : (isEn
+            ? '💻 Local Offline (Free Forever • Unlimited Files)'
+            : '💻 ออฟไลน์ในเครื่อง (ฟรีตลอดชีพ • ไม่จำกัดจำนวนไฟล์)');
     }
 
     const isLoggedIn = Boolean(state.token && String(state.token).trim());
