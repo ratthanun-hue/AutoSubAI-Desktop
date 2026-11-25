@@ -8,8 +8,8 @@ Native Desktop Pro NLE, AI Voiceover Dubbing, Secretary Meeting Minutes & Drama 
 
 ## ⬇️ Downloads & 📖 Visual User Guide (v1.8.0 Pro Studio)
 - **Latest Installers (Windows `.exe`/`.msi`, macOS Apple Silicon & Intel `.dmg`, Linux `.AppImage`/`.deb`)**: **[GitHub Releases (Latest)](https://github.com/ratthanun-hue/AutoSubAI-Desktop/releases/latest)**
-- **📖 คู่มือการใช้งานพร้อมภาพประกอบ (Web + พิมพ์เป็น PDF)**: **[https://www.thaiautosub.com/guide](https://www.thaiautosub.com/guide)**
-- **📘 GitHub User Guide (Thai + Annotated Screenshots)**: **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**
+- **📖 Visual User Guide — Thai & English (Web + Print PDF)**: **[https://www.thaiautosub.com/guide](https://www.thaiautosub.com/guide)** (`🇹🇭 TH` / [`🇬🇧 EN`](https://www.thaiautosub.com/guide?lang=en))
+- **📘 GitHub User Guide**: **[Thai (`docs/USER_GUIDE.md`)](docs/USER_GUIDE.md)** • **[English (`docs/USER_GUIDE_EN.md`)](docs/USER_GUIDE_EN.md)**
 
 ---
 

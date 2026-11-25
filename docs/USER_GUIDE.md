@@ -1,6 +1,7 @@
 # 📖 คู่มือการใช้งาน AutoSubAI Desktop Pro Studio (v1.8.0)
 
-> 🌐 **อ่านเวอร์ชันเว็บสวยหรู (พร้อมค้นหา & พิมพ์เป็น PDF ได้ใน 1 คลิก)**: **[https://www.thaiautosub.com/guide](https://www.thaiautosub.com/guide)**
+> 🌐 **อ่านเวอร์ชันเว็บสวยหรู (สลับภาษา `TH / EN` + ค้นหา & พิมพ์เป็น PDF ใน 1 คลิก)**: **[https://www.thaiautosub.com/guide](https://www.thaiautosub.com/guide)**  
+> 🇬🇧 **Read the English User Guide**: **[docs/USER_GUIDE_EN.md](USER_GUIDE_EN.md)**
 
 **AutoSubAI Desktop Pro Studio** คือโปรแกรมตัดต่อวิดีโอ พากย์เสียง AI ทำซับไตเติล และสรุปรายงานการประชุมภาษาไทย-ต่างประเทศแบบครบวงจรบน **Windows, macOS และ Linux** รองรับภาษาแอปครบ **ไทย (`TH`) / อังกฤษ (`EN`) 100%** มาพร้อมเอนจิน FFmpeg 6.1.1 และฟอนต์ไทย (`Prompt`, `Kanit`, `Sarabun`) ในตัว ใช้งาน **Local Workspace + พากย์เสียง AI ฟรี 100% บนเครื่องคุณ** พร้อมสิทธิ์ **🎁 ถอดเสียง AI ฟรี 15 นาที/สัปดาห์ (สูงสุด 5 นาที/ไฟล์) + เครดิตต้อนรับ ฿10** จาก [thaiautosub.com](https://www.thaiautosub.com)
 
