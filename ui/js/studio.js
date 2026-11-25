@@ -1059,6 +1059,7 @@
         brollOverlays: proMeta.brollOverlays || [],
         voiceoverClips: proMeta.voiceoverClips || [],
         bgmInfo: proMeta.bgmInfo || { enabled: false, name: '', auto_ducking: true },
+        audioMonitor: proMeta.audioMonitor || { solo: null, mute: { t3: false, t2: false, t1: false } },
         watermarkEnabled: !!(this.watermark && this.watermark.enabled && this.watermark.image_path),
       });
     }

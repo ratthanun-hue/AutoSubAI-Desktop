@@ -250,8 +250,16 @@
         return;
       }
 
+      const singleRowMode = items.length === 1;
       list.innerHTML = items
-        .map(({ r, idx }) => `
+        .map(({ r, idx }) => {
+          const textLen = (r.text || '').length;
+          const rowLines = singleRowMode
+            ? 32
+            : (items.length <= 3
+              ? Math.max(8, Math.min(22, Math.ceil(textLen / 65) + 1))
+              : Math.max(3, Math.min(10, Math.ceil(textLen / 65) + 1)));
+          return `
           <div class="mt-row ${idx === this.activeRowIdx ? 'active' : ''}" data-mt-row="${idx}">
             <div class="mt-row-head">
               <button type="button" class="mt-ts-btn" data-mt-play="${idx}" title="คลิกเพื่อฟังเสียงท่อนนี้">
@@ -265,9 +273,10 @@
                 <button type="button" class="btn btn-danger-ghost btn-xs" data-mt-del="${idx}" title="ลบย่อหน้านี้">✕</button>
               </div>
             </div>
-            <textarea class="mt-row-text" data-mt-text="${idx}" rows="2">${escapeHtml(r.text)}</textarea>
+            <textarea class="mt-row-text ${singleRowMode ? 'mt-row-tall' : ''}" data-mt-text="${idx}" rows="${rowLines}">${escapeHtml(r.text)}</textarea>
           </div>
-        `)
+        `;
+        })
         .join('');
       if (this._updateKaraokeStage) this._updateKaraokeStage(true);
     }
@@ -1050,12 +1059,36 @@
 
         const box = $('mt-karaoke-text');
         if (box) {
-          box.innerHTML = tokens
-            .map((tok, i) => {
+          // Rolling 2-line teleprompter window (~115 chars centered around active word)
+          // Keeps karaoke stage strictly 2 lines tall even for long paragraphs!
+          let winStart = activeTokIdx;
+          let winEnd = activeTokIdx;
+          let beforeChars = 0;
+          let afterChars = tokens[activeTokIdx] ? tokens[activeTokIdx].length : 0;
+          while (winStart > 0 && beforeChars + tokens[winStart - 1].length <= 42) {
+            winStart--;
+            beforeChars += tokens[winStart].length;
+          }
+          while (winEnd + 1 < tokens.length && beforeChars + afterChars + tokens[winEnd + 1].length <= 122) {
+            winEnd++;
+            afterChars += tokens[winEnd].length;
+          }
+          // Fill remaining budget from before if near the end of paragraph
+          while (winStart > 0 && beforeChars + afterChars + tokens[winStart - 1].length <= 122) {
+            winStart--;
+            beforeChars += tokens[winStart].length;
+          }
+          const prefixEllipsis = winStart > 0 ? '<span class="mt-k-word done">…</span>' : '';
+          const suffixEllipsis = winEnd + 1 < tokens.length ? '<span class="mt-k-word">…</span>' : '';
+          const sliceHtml = tokens
+            .slice(winStart, winEnd + 1)
+            .map((tok, offset) => {
+              const i = winStart + offset;
               const cls = i < activeTokIdx ? 'mt-k-word done' : (i === activeTokIdx ? 'mt-k-word active' : 'mt-k-word');
               return `<span class="${cls}">${escapeHtml(tok)}</span>`;
             })
             .join('');
+          box.innerHTML = `<div class="mt-karaoke-inner">${prefixEllipsis}${sliceHtml}${suffixEllipsis}</div>`;
         }
       };
 

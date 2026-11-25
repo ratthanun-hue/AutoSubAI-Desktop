@@ -73,6 +73,57 @@
 
       this.thumbPreviewVisible = false;
       this.exportingThumb = false;
+
+      // v1.7.1: Independent 5-Track Audio Monitor (Preview-only Solo/Mute for T3, T2, T1)
+      this.trackMonitor = {
+        solo: null, // null | 't3' | 't2' | 't1'
+        mute: { t3: false, t2: false, t1: false },
+      };
+    }
+
+    isTrackAudible(key) {
+      if (this.trackMonitor.solo) return this.trackMonitor.solo === key;
+      return !this.trackMonitor.mute[key];
+    }
+
+    toggleTrackSolo(key) {
+      this.trackMonitor.solo = this.trackMonitor.solo === key ? null : key;
+      this._syncMonitorUi();
+      const names = { t3: 'T3 เสียงพากย์', t2: 'T2 เสียงต้นฉบับ', t1: 'T1 เพลง BGM' };
+      this.host.showToast(
+        this.trackMonitor.solo
+          ? `🎧 Solo: ฟังเฉพาะ ${names[key]} ล้วนๆ (เฉพาะพรีวิว)`
+          : '🔊 คืนค่าฟังเสียงรวมทุกแทร็กแล้ว',
+        'info'
+      );
+    }
+
+    toggleTrackMute(key) {
+      this.trackMonitor.mute[key] = !this.trackMonitor.mute[key];
+      if (this.trackMonitor.solo === key && this.trackMonitor.mute[key]) {
+        this.trackMonitor.solo = null;
+      }
+      this._syncMonitorUi();
+    }
+
+    resetTrackMonitor() {
+      this.trackMonitor.solo = null;
+      this.trackMonitor.mute = { t3: false, t2: false, t1: false };
+      this._syncMonitorUi();
+      this.host.showToast('🔊 ฟังเสียงรวมครบทุกแทร็ก (T3 + T2 + T1)', 'info');
+    }
+
+    _syncMonitorUi() {
+      document.querySelectorAll('[data-trk-solo]').forEach((btn) => {
+        btn.classList.toggle('solo-on', this.trackMonitor.solo === btn.dataset.trkSolo);
+      });
+      document.querySelectorAll('[data-trk-mute]').forEach((btn) => {
+        btn.classList.toggle('mute-on', !!this.trackMonitor.mute[btn.dataset.trkMute]);
+      });
+      const video = $('studio-video');
+      const curT = video ? (video.currentTime || 0) : 0;
+      this.onTimeUpdate(curT, this.studio ? this.studio.activeCueIdx : -1);
+      this.syncTimeline();
     }
 
     getRenderConfig() {
@@ -121,6 +172,10 @@
           enabled: !!this.bgm.enabled && !!this.bgm.bgm_path,
           name: this.bgm.name || '',
           auto_ducking: !!this.bgm.auto_ducking,
+        },
+        audioMonitor: {
+          solo: this.trackMonitor.solo,
+          mute: { ...this.trackMonitor.mute },
         },
       };
     }
@@ -619,8 +674,12 @@
         }
       }
 
-      // 2. Live Voiceover / Dubbing Playback & Original Audio Auto-Ducking
+      // 2. Live Voiceover / Dubbing Playback & Original Audio Auto-Ducking (respects T3/T2/T1 Monitor Solo/Mute)
       const video = $('studio-video');
+      const t3Audible = this.isTrackAudible('t3');
+      const t2Audible = this.isTrackAudible('t2');
+      const t1Audible = this.isTrackAudible('t1');
+
       let voSpeaking = false;
       if (this.voiceover.enabled && this.voiceover.clips.length > 0 && video) {
         for (const clip of this.voiceover.clips) {
@@ -630,23 +689,36 @@
           if (!a) continue;
           if (inRange) {
             voSpeaking = true;
-            a.volume = Math.max(0, Math.min(1, Number(clip.volume) || 1.0));
-            const targetPos = Math.max(0, t - clip.start);
-            if (!video.paused) {
-              if (Math.abs((a.currentTime || 0) - targetPos) > 0.35) {
-                try { a.currentTime = targetPos; } catch (_) {}
+            if (!t3Audible) {
+              if (!a.paused) a.pause();
+            } else {
+              a.volume = Math.max(0, Math.min(1, Number(clip.volume) || 1.0));
+              const targetPos = Math.max(0, t - clip.start);
+              if (!video.paused) {
+                if (Math.abs((a.currentTime || 0) - targetPos) > 0.35) {
+                  try { a.currentTime = targetPos; } catch (_) {}
+                }
+                if (a.paused) a.play().catch(() => {});
+              } else if (!a.paused) {
+                a.pause();
               }
-              if (a.paused) a.play().catch(() => {});
-            } else if (!a.paused) {
-              a.pause();
             }
           } else if (!a.paused) {
             a.pause();
           }
         }
-        if (!this.voRecording) {
+      }
+
+      if (video && !this.voRecording) {
+        if (!t2Audible) {
+          video.muted = true;
+        } else {
+          video.muted = false;
           const baseDlg = Math.min(1.0, Math.max(0.0, this.bgm.dialogue_volume));
-          if (voSpeaking && this.voiceover.duck_original) {
+          // When soloing T2 raw original audio, play full original volume without voiceover ducking
+          if (this.trackMonitor.solo === 't2') {
+            video.volume = baseDlg;
+          } else if (voSpeaking && t3Audible && this.voiceover.duck_original) {
             video.volume = Math.max(0.0, Math.min(1.0, baseDlg * Number(this.voiceover.original_duck_level)));
           } else {
             video.volume = baseDlg;
@@ -654,16 +726,24 @@
         }
       }
 
-      // 3. Live BGM Auto-Ducking during active subtitle cues OR voiceover
+      // 3. Live BGM Auto-Ducking during active subtitle cues OR voiceover (respects T1 Monitor Solo/Mute)
       const bgmAudio = $('studio-bgm-audio');
       if (bgmAudio && this.bgm.enabled && this.bgm.bgm_path && video) {
-        const baseVol = Math.max(0.02, Math.min(1.0, this.bgm.bgm_volume));
-        const duckedVol = this.bgm.auto_ducking && (activeCueIdx >= 0 || voSpeaking) ? baseVol * 0.28 : baseVol;
-        bgmAudio.volume = duckedVol;
-        if (!video.paused && bgmAudio.paused) {
-          bgmAudio.play().catch(() => {});
-        } else if (video.paused && !bgmAudio.paused) {
-          bgmAudio.pause();
+        if (!t1Audible) {
+          bgmAudio.muted = true;
+          if (!bgmAudio.paused) bgmAudio.pause();
+        } else {
+          bgmAudio.muted = false;
+          const baseVol = Math.max(0.02, Math.min(1.0, this.bgm.bgm_volume));
+          const duckedVol = (this.trackMonitor.solo !== 't1' && this.bgm.auto_ducking && (activeCueIdx >= 0 || voSpeaking))
+            ? baseVol * 0.28
+            : baseVol;
+          bgmAudio.volume = duckedVol;
+          if (!video.paused && bgmAudio.paused) {
+            bgmAudio.play().catch(() => {});
+          } else if (video.paused && !bgmAudio.paused) {
+            bgmAudio.pause();
+          }
         }
       }
     }
@@ -935,6 +1015,15 @@
           if (bgmA && this.bgm.enabled && this.bgm.bgm_path) bgmA.play().catch(() => {});
         });
       }
+
+      // 5-Track Audio Monitor Solo (S) / Mute (M) buttons (v1.7.1)
+      document.querySelectorAll('[data-trk-solo]').forEach((btn) => {
+        btn.addEventListener('click', () => this.toggleTrackSolo(btn.dataset.trkSolo));
+      });
+      document.querySelectorAll('[data-trk-mute]').forEach((btn) => {
+        btn.addEventListener('click', () => this.toggleTrackMute(btn.dataset.trkMute));
+      });
+      $('wf-monitor-reset-btn')?.addEventListener('click', () => this.resetTrackMonitor());
 
       // AI Text-to-Voice Dubbing controls (v1.7.0)
       $('vo-tts-rate')?.addEventListener('input', (e) => {

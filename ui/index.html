@@ -15,7 +15,7 @@
         <div>
           <div class="brand-title">
             AutoSubAI Desktop
-            <span class="badge-beta">v1.7.0 Pro Studio</span>
+            <span class="badge-beta">v1.7.1 Pro Studio</span>
           </div>
           <div class="brand-sub" data-i18n="brandSub">Local &amp; Cloud Drama Subtitling, Style Inspector &amp; Video Finishing</div>
         </div>
@@ -1002,6 +1002,26 @@
                 <button type="button" class="chip-btn" data-wf-zoom="8">8x</button>
                 <button type="button" class="chip-btn" data-wf-zoom="16">16x</button>
                 <button id="wf-expand-btn" type="button" class="btn btn-ghost btn-xs" title="ขยาย/ย่อความสูงไทม์ไลน์ (หรือลากแถบด้านบน)">⤢ ขยาย/ย่อ</button>
+              </div>
+              <!-- 5-Track Audio Monitor: Solo (S) / Mute (M) for T3 Voiceover, T2 Original, T1 BGM (v1.7.1) -->
+              <div class="wf-monitor-bar" title="เลือกฟังเสียงอิสระเพื่อเช็กงาน (S = ฟังเดี่ยว Solo, M = ปิดเสียงชั่วคราว Mute — ไม่มีผลต่อการส่งออก MP4)">
+                <span class="muted" style="font-size:11px; font-weight:700;">🎧 ฟังเสียง:</span>
+                <span class="wf-trk-ctrl">
+                  <span style="color:#fda4af;">T3🎙️</span>
+                  <button type="button" class="wf-sm-btn" data-trk-solo="t3" title="ฟังเฉพาะเสียงพากย์ T3 ล้วนๆ (Solo)">S</button>
+                  <button type="button" class="wf-sm-btn" data-trk-mute="t3" title="ปิดเสียงพากย์ T3 ชั่วคราว (Mute)">M</button>
+                </span>
+                <span class="wf-trk-ctrl">
+                  <span style="color:#a5b4fc;">T2🎬</span>
+                  <button type="button" class="wf-sm-btn" data-trk-solo="t2" title="ฟังเฉพาะเสียงวิดีโอต้นฉบับ T2 ล้วนๆ (Solo)">S</button>
+                  <button type="button" class="wf-sm-btn" data-trk-mute="t2" title="ปิดเสียงวิดีโอต้นฉบับ T2 ชั่วคราว (Mute)">M</button>
+                </span>
+                <span class="wf-trk-ctrl">
+                  <span style="color:#5eead4;">T1🎵</span>
+                  <button type="button" class="wf-sm-btn" data-trk-solo="t1" title="ฟังเฉพาะเพลงพื้นหลัง BGM T1 ล้วนๆ (Solo)">S</button>
+                  <button type="button" class="wf-sm-btn" data-trk-mute="t1" title="ปิดเสียงเพลง BGM T1 ชั่วคราว (Mute)">M</button>
+                </span>
+                <button id="wf-monitor-reset-btn" type="button" class="btn btn-ghost btn-xs" style="padding:2px 6px; font-size:10.5px;" title="คืนค่าฟังรวมทุกแทร็กตามปกติ">🔊 ฟังรวม</button>
               </div>
               <div class="transport-group">
                 <button id="wf-razor-split-btn" type="button" class="btn btn-secondary btn-xs" title="วางเส้นตัด ณ Playhead [B]">🔪 วางเส้นตัด [B]</button>

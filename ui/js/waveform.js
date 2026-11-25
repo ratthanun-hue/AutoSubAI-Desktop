@@ -88,11 +88,11 @@
       const t1H = Math.max(22, avail - t5H - t4H - t3H - t2H);
 
       let y = rulerH + 1;
-      const t5 = { y, hh: t5H, bg: 'rgba(245, 158, 11, 0.04)', label: 'T5 🖼️' }; y += t5H + 1;
-      const t4 = { y, hh: t4H, bg: 'rgba(16, 185, 129, 0.04)', label: 'T4 💬' }; y += t4H + 1;
-      const t3 = { y, hh: t3H, bg: 'rgba(244, 63, 94, 0.05)',  label: 'T3 🎙️' }; y += t3H + 1;
-      const t2 = { y, hh: t2H, bg: 'rgba(99, 102, 241, 0.05)', label: 'T2 🎬' }; y += t2H + 1;
-      const t1 = { y, hh: Math.max(20, h - y), bg: 'rgba(20, 184, 166, 0.04)', label: 'T1 🎵' };
+      const t5 = { y, hh: t5H, bg: 'rgba(245, 158, 11, 0.04)', label: 'T5 🖼️', key: 't5' }; y += t5H + 1;
+      const t4 = { y, hh: t4H, bg: 'rgba(16, 185, 129, 0.04)', label: 'T4 💬', key: 't4' }; y += t4H + 1;
+      const t3 = { y, hh: t3H, bg: 'rgba(244, 63, 94, 0.05)',  label: 'T3 🎙️', key: 't3' }; y += t3H + 1;
+      const t2 = { y, hh: t2H, bg: 'rgba(99, 102, 241, 0.05)', label: 'T2 🎬', key: 't2' }; y += t2H + 1;
+      const t1 = { y, hh: Math.max(20, h - y), bg: 'rgba(20, 184, 166, 0.04)', label: 'T1 🎵', key: 't1' };
       return { rulerH, t5, t4, t3, t2, t1, tracks: [t5, t4, t3, t2, t1] };
     }
 
@@ -108,6 +108,7 @@
       brollOverlays,
       voiceoverClips,
       bgmInfo,
+      audioMonitor,
       watermarkEnabled,
     }) {
       if (peaks !== undefined) this.peaks = peaks || [];
@@ -121,6 +122,7 @@
       if (brollOverlays !== undefined) this.brollOverlays = brollOverlays || [];
       if (voiceoverClips !== undefined) this.voiceoverClips = voiceoverClips || [];
       if (bgmInfo !== undefined) this.bgmInfo = bgmInfo || { enabled: false, name: '', auto_ducking: true };
+      if (audioMonitor !== undefined) this.audioMonitor = audioMonitor || { solo: null, mute: { t3: false, t2: false, t1: false } };
       if (watermarkEnabled !== undefined) this.watermarkEnabled = !!watermarkEnabled;
       this.draw();
     }
@@ -510,13 +512,23 @@
         ctx.fillText('🎵 BGM Track (เพิ่มเพลงพื้นหลังในแท็บ 🎚️ สี/สปีด & BGM)', 48, bgmTop + Math.round(bgmH * 0.64));
       }
 
-      // Track badge pills on far left
+      // Track badge pills on far left (with live SOLO / MUTE monitor indicators on T3/T2/T1)
+      const mon = this.audioMonitor || { solo: null, mute: {} };
       for (const tr of tracks) {
-        ctx.fillStyle = 'rgba(2, 6, 23, 0.86)';
-        ctx.fillRect(2, tr.y + 3, 40, 17);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = '9.5px sans-serif';
-        ctx.fillText(tr.label, 5, tr.y + 15);
+        const isAudioTrack = tr.key === 't3' || tr.key === 't2' || tr.key === 't1';
+        const isSolo = isAudioTrack && mon.solo === tr.key;
+        const isMuted = isAudioTrack && ((mon.solo && mon.solo !== tr.key) || !!(mon.mute && mon.mute[tr.key]));
+        if (isMuted) {
+          ctx.fillStyle = 'rgba(2, 6, 23, 0.56)';
+          ctx.fillRect(0, tr.y, w, tr.hh);
+        }
+        ctx.fillStyle = isSolo ? 'rgba(245, 158, 11, 0.92)' : (isMuted ? 'rgba(127, 29, 29, 0.86)' : 'rgba(2, 6, 23, 0.86)');
+        const badgeW = (isSolo || isMuted) ? 56 : 40;
+        ctx.fillRect(2, tr.y + 3, badgeW, 17);
+        ctx.fillStyle = isSolo ? '#0f172a' : (isMuted ? '#fecaca' : '#cbd5e1');
+        ctx.font = 'bold 9.5px sans-serif';
+        const suffix = isSolo ? ' S' : (isMuted ? ' M' : '');
+        ctx.fillText(tr.label + suffix, 5, tr.y + 15);
       }
 
       // Razor Split Markers (amber dashed vertical lines across all tracks)
