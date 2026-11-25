@@ -667,8 +667,8 @@
       engBadge.classList.toggle('pill-ok', ok);
       engBadge.classList.toggle('pill-warn', !ok);
       engBadge.textContent = ok
-        ? `💻 whisper.cpp พร้อมใช้งาน (≤${maxMins} น./ไฟล์)`
-        : '💻 whisper.cpp (เวอร์ชั่นฟรี-ไม่หักเครดิต)';
+        ? `💻 ออฟไลน์ในเครื่อง (≤${maxMins} น./ไฟล์)`
+        : '💻 ออฟไลน์ในเครื่อง (เวอร์ชั่นฟรี-ไม่หักเครดิต)';
     }
 
     if (statusEl && spec) {

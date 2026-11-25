@@ -165,8 +165,8 @@ fn default_offline_policy() -> Value {
             {
                 "id": "base",
                 "enabled": true,
-                "label_th": "Whisper Base (เวอร์ชั่นฟรี-ไม่หักเครดิต • ~57 MB)",
-                "label_en": "Whisper Base (Free Version — 0 Credits • ~57 MB)",
+                "label_th": "โมเดลถอดเสียง (เวอร์ชั่นฟรี)",
+                "label_en": "Voice Model (Free Version)",
                 "desc_th": "เวอร์ชั่นฟรี-ไม่หักเครดิต",
                 "desc_en": "Free Version — 0 Credits",
                 "filename": "ggml-base-q5_1.bin",
