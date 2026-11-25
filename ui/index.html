@@ -15,7 +15,7 @@
         <div>
           <div class="brand-title">
             AutoSubAI Desktop
-            <span class="badge-beta">v1.8.0 Pro Studio</span>
+            <span class="badge-beta">v1.9.0 Pro Studio</span>
           </div>
           <div class="brand-sub" data-i18n="brandSub">Local &amp; Cloud Drama Subtitling, Style Inspector &amp; Video Finishing</div>
         </div>
@@ -1042,9 +1042,90 @@
         </div>
       </div>
 
-      <!-- VIEW 5: SECRETARY MEETING MINUTES WORKSPACE (v1.6.0 — 3-Step Zero-Jargon Mode) -->
+      <!-- VIEW 5: SECRETARY MEETING PROJECT WORKSPACE (v1.9.0 — 100% Local-Only Confidential Storage) -->
       <div id="view-meeting" class="tab-view hidden">
-          <div class="mt-shell">
+          <!-- SUB-VIEW A: MEETING PROJECTS HUB (Multi-Meeting Local Archive) -->
+          <div id="mt-hub-view" class="mt-shell">
+            <!-- Business Confidentiality & Local-Only Storage Shield Banner -->
+            <div class="mt-privacy-banner">
+              <div class="mt-privacy-left">
+                <div class="mt-privacy-icon">🔒</div>
+                <div>
+                  <div class="mt-privacy-title" data-i18n="mtPrivacyTitle">ความลับทางธุรกิจปลอดภัย 100% — ข้อมูลประชุมทั้งหมดเก็บในเครื่องคุณเท่านั้น (Local-Only)</div>
+                  <div class="mt-privacy-sub" data-i18n="mtPrivacySub">รายงานการประชุม มติ รายชื่อผู้เข้าร่วม และบทถอดเสียงทุกฉบับบันทึกเป็นไฟล์ในเครื่องคอมพิวเตอร์ของคุณโดยตรง ไม่อัปโหลดค้างบนคลาวด์ และไม่ติดขีดจำกัดความจุเบราว์เซอร์</div>
+                </div>
+              </div>
+              <div class="mt-privacy-actions">
+                <button id="mt-open-folder-btn" type="button" class="btn btn-secondary btn-xs" data-i18n="mtOpenFolder">📂 เปิดโฟลเดอร์เก็บไฟล์</button>
+                <button id="mt-backup-all-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="mtBackupAll">📦 สำรองคลัง (.JSON)</button>
+                <button id="mt-import-backup-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="mtImportBackup">📥 นำเข้าสำรอง</button>
+                <input id="mt-import-backup-file" type="file" accept=".json,application/json" class="hidden" />
+              </div>
+            </div>
+
+            <!-- Hub Header & Actions -->
+            <section class="card mt-hub-card">
+              <div class="card-header" style="margin-bottom:12px;">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <h2 style="font-size:16px;" data-i18n="mtHubTitle">📁 คลังโปรเจกต์งานประชุม (Meeting Project Workspace)</h2>
+                    <span id="mt-hub-count" class="mono-tag">0 โปรเจกต์</span>
+                  </div>
+                  <p class="muted" style="font-size:12px; margin-top:3px;" data-i18n="mtHubSub">จัดเก็บแยกแต่ละวาระการประชุม ค้นหาย้อนหลังได้ทั้งมติและบทพูด พร้อมทำซ้ำรายชื่อผู้พูดเป็นเทมเพลตรอบหน้าใน 1 คลิก</p>
+                </div>
+                <button id="mt-new-project-btn" type="button" class="btn btn-primary mt-big-btn" data-i18n="mtNewProjectBtn">➕ สร้างโปรเจกต์ประชุมใหม่</button>
+              </div>
+
+              <div class="mt-hub-toolbar">
+                <input id="mt-hub-search" type="search" class="mt-hub-search" data-i18n-ph="mtHubSearchPh" placeholder="🔍 ค้นหาชื่อการประชุม, ผู้เข้าร่วม, มติ หรือคำพูดในบทประชุม..." />
+                <div class="mt-hub-filters" role="group">
+                  <button type="button" class="chip-btn active" data-mt-filter-status="all" data-i18n="mtFilterAll">ทั้งหมด</button>
+                  <button type="button" class="chip-btn" data-mt-filter-status="draft" data-i18n="mtStatusDraft">📝 กำลังร่าง</button>
+                  <button type="button" class="chip-btn" data-mt-filter-status="summarized" data-i18n="mtStatusSummarized">✅ สรุปแล้ว</button>
+                  <button type="button" class="chip-btn" data-mt-filter-status="exported" data-i18n="mtStatusExported">📘 ส่งออกแล้ว</button>
+                </div>
+                <select id="mt-hub-category-filter" class="mini-select" title="กรองหมวดหมู่การประชุม">
+                  <option value="all" data-i18n="mtCatAll">ทุกหมวดหมู่</option>
+                  <option value="executive" data-i18n="mtCatExecutive">🏛️ ประชุมบริหาร</option>
+                  <option value="board" data-i18n="mtCatBoard">⚖️ คณะกรรมการ / บอร์ด</option>
+                  <option value="team" data-i18n="mtCatTeam">👥 ประชุมทีมประจำสัปดาห์</option>
+                  <option value="client" data-i18n="mtCatClient">🤝 ลูกค้า / B2B</option>
+                  <option value="interview" data-i18n="mtCatInterview">🎤 สัมภาษณ์ / วิจัย</option>
+                  <option value="general" data-i18n="mtCatGeneral">📁 ทั่วไป</option>
+                </select>
+              </div>
+
+              <div id="mt-hub-grid" class="mt-hub-grid"></div>
+            </section>
+          </div>
+
+          <!-- SUB-VIEW B: ACTIVE MEETING EDITOR (3-Step Word-Style Workspace) -->
+          <div id="mt-editor-view" class="mt-shell hidden">
+            <!-- Active Project Top Bar -->
+            <div class="mt-editor-topbar">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <button id="mt-back-hub-btn" type="button" class="btn btn-secondary btn-sm" data-i18n="mtBackToHub">← คลังงานประชุม</button>
+                <span class="mt-local-pill" data-i18n="mtLocalLockPill" title="ไฟล์เก็บในเครื่องคุณ 100% ไม่อัปโหลดขึ้นคลาวด์">🔒 เก็บในเครื่อง 100%</span>
+                <span id="mt-save-badge" class="mono-tag">💾 บันทึกในเครื่องอัตโนมัติ</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <select id="mt-category-select" class="mini-select" title="หมวดหมู่การประชุม">
+                  <option value="executive" data-i18n="mtCatExecutive">🏛️ ประชุมบริหาร</option>
+                  <option value="board" data-i18n="mtCatBoard">⚖️ คณะกรรมการ / บอร์ด</option>
+                  <option value="team" data-i18n="mtCatTeam">👥 ประชุมทีมประจำสัปดาห์</option>
+                  <option value="client" data-i18n="mtCatClient">🤝 ลูกค้า / B2B</option>
+                  <option value="interview" data-i18n="mtCatInterview">🎤 สัมภาษณ์ / วิจัย</option>
+                  <option value="general" selected data-i18n="mtCatGeneral">📁 ทั่วไป</option>
+                </select>
+                <select id="mt-status-select" class="mini-select" title="สถานะรายงานการประชุม">
+                  <option value="draft" selected data-i18n="mtStatusDraft">📝 กำลังร่าง</option>
+                  <option value="summarized" data-i18n="mtStatusSummarized">✅ สรุปแล้ว</option>
+                  <option value="exported" data-i18n="mtStatusExported">📘 ส่งออกแล้ว</option>
+                </select>
+                <button id="mt-clone-current-btn" type="button" class="btn btn-secondary btn-xs" data-i18n="mtCloneTemplateBtn" title="สร้างโปรเจกต์ใหม่โดยคัดลอกรายชื่อผู้เข้าร่วมและปุ่มชื่อผู้พูดไปใช้รอบหน้า">📋 ใช้เป็นเทมเพลตรอบหน้า</button>
+              </div>
+            </div>
+
             <!-- 3-Step Visual Guide Banner -->
             <div class="mt-steps-banner">
               <div class="mt-step-pill">

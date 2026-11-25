@@ -1358,6 +1358,134 @@ async fn export_meeting_docx(req: docx_builder::MeetingDocxRequest) -> Result<St
     docx_builder::write_meeting_docx(&req).await
 }
 
+// ---------------------------------------------------------------------------
+// Local-Only Confidential Meeting Project Workspace Storage (v1.9.0)
+// All meeting minutes, speaker tags & transcripts are saved strictly on disk
+// inside the user's local app_data_dir/meetings/ folder (0% cloud storage).
+// ---------------------------------------------------------------------------
+fn meetings_storage_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("ไม่สามารถเข้าถึงโฟลเดอร์ข้อมูลแอปได้: {}", e))?;
+    let dir = base.join("meetings");
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("ไม่สามารถสร้างโฟลเดอร์เก็บงานประชุมได้: {}", e))?;
+    Ok(dir)
+}
+
+fn sanitize_meeting_id(id: &str) -> Result<String, String> {
+    let clean = id.trim();
+    if clean.is_empty()
+        || clean.len() > 64
+        || !clean
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err("รหัสโปรเจกต์การประชุมไม่ถูกต้อง".to_string());
+    }
+    Ok(clean.to_string())
+}
+
+#[tauri::command]
+async fn get_meetings_storage_dir(app: AppHandle) -> Result<String, String> {
+    let dir = meetings_storage_dir(&app)?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn list_meeting_projects(app: AppHandle) -> Result<Vec<Value>, String> {
+    let dir = meetings_storage_dir(&app)?;
+    let mut entries = tokio::fs::read_dir(&dir)
+        .await
+        .map_err(|e| format!("ไม่สามารถอ่านโฟลเดอร์งานประชุมได้: {}", e))?;
+    let mut list: Vec<Value> = Vec::new();
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        if let Ok(raw) = tokio::fs::read_to_string(&path).await {
+            if let Ok(val) = serde_json::from_str::<Value>(&raw) {
+                if val.is_object() {
+                    list.push(val);
+                }
+            }
+        }
+    }
+    list.sort_by(|a, b| {
+        let ta = a.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(0);
+        let tb = b.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(0);
+        tb.cmp(&ta)
+    });
+    Ok(list)
+}
+
+#[tauri::command]
+async fn save_meeting_project(
+    app: AppHandle,
+    id: String,
+    payload_json: String,
+) -> Result<String, String> {
+    let safe_id = sanitize_meeting_id(&id)?;
+    let parsed: Value = serde_json::from_str(&payload_json)
+        .map_err(|e| format!("ข้อมูลโปรเจกต์ JSON ไม่ถูกต้อง: {}", e))?;
+    let pretty = serde_json::to_string_pretty(&parsed)
+        .map_err(|e| format!("จัดรูปแบบ JSON ไม่สำเร็จ: {}", e))?;
+    let dir = meetings_storage_dir(&app)?;
+    let target = dir.join(format!("{}.json", safe_id));
+    let tmp = dir.join(format!("{}.json.tmp", safe_id));
+    tokio::fs::write(&tmp, pretty.as_bytes())
+        .await
+        .map_err(|e| format!("บันทึกไฟล์ชั่วคราวไม่สำเร็จ: {}", e))?;
+    tokio::fs::rename(&tmp, &target)
+        .await
+        .map_err(|e| format!("บันทึกโปรเจกต์การประชุมไม่สำเร็จ: {}", e))?;
+    Ok(target.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn delete_meeting_project(app: AppHandle, id: String) -> Result<bool, String> {
+    let safe_id = sanitize_meeting_id(&id)?;
+    let dir = meetings_storage_dir(&app)?;
+    let target = dir.join(format!("{}.json", safe_id));
+    if target.is_file() {
+        tokio::fs::remove_file(&target)
+            .await
+            .map_err(|e| format!("ลบโปรเจกต์การประชุมไม่สำเร็จ: {}", e))?;
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+#[tauri::command]
+async fn open_meetings_folder(app: AppHandle) -> Result<String, String> {
+    let dir = meetings_storage_dir(&app)?;
+    let dir_str = dir.to_string_lossy().to_string();
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&dir_str)
+            .spawn()
+            .map_err(|e| format!("เปิดโฟลเดอร์ไม่สำเร็จ: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&dir_str)
+            .spawn()
+            .map_err(|e| format!("เปิดโฟลเดอร์ไม่สำเร็จ: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&dir_str)
+            .spawn()
+            .map_err(|e| format!("เปิดโฟลเดอร์ไม่สำเร็จ: {}", e))?;
+    }
+    Ok(dir_str)
+}
+
 #[tauri::command]
 async fn generate_tts_voiceover(
     project_id: String,
@@ -1408,6 +1536,11 @@ pub fn run() {
             save_voiceover_recording,
             generate_tts_voiceover,
             export_meeting_docx,
+            get_meetings_storage_dir,
+            list_meeting_projects,
+            save_meeting_project,
+            delete_meeting_project,
+            open_meetings_folder,
             api_submit_feedback,
             api_login,
             api_google_browser_login,

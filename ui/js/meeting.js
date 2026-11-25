@@ -2,9 +2,60 @@
   'use strict';
 
   const DRAFT_KEY = 'autosub_meeting_draft_v1';
+  const PROJECTS_LS_KEY = 'autosub_meeting_projects_v2';
   const MEDIA_EXTS = ['m4a', 'mp3', 'wav', 'ogg', 'aac', 'flac', 'mp4', 'mov', 'mkv', 'webm'];
   const TEXT_EXTS = ['srt', 'vtt', 'txt'];
   const $ = (id) => document.getElementById(id);
+
+  const DEFAULT_SPEAKERS_TH = ['ประธานที่ประชุม', 'เลขานุการ', 'ฝ่ายบัญชี/การเงิน', 'ฝ่ายปฏิบัติการ', 'ผู้เข้าร่วม 1'];
+  const DEFAULT_SPEAKERS_EN = ['Chairperson', 'Secretary', 'Finance', 'Operations', 'Participant 1'];
+
+  function t(key, fallback) {
+    if (window.DesktopI18n && typeof window.DesktopI18n.t === 'function') {
+      const v = window.DesktopI18n.t(key);
+      if (v && v !== key) return v;
+    }
+    return fallback || key;
+  }
+
+  function isEn() {
+    return window.DesktopI18n && typeof window.DesktopI18n.getLang === 'function' && window.DesktopI18n.getLang() === 'en';
+  }
+
+  function makeMeetingId() {
+    return `mt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  }
+
+  function catLabel(cat) {
+    const map = {
+      executive: ['mtCatExecutive', '🏛️ ประชุมบริหาร'],
+      board: ['mtCatBoard', '⚖️ คณะกรรมการ / บอร์ด'],
+      team: ['mtCatTeam', '👥 ประชุมทีมประจำสัปดาห์'],
+      client: ['mtCatClient', '🤝 ลูกค้า / B2B'],
+      interview: ['mtCatInterview', '🎤 สัมภาษณ์ / วิจัย'],
+      general: ['mtCatGeneral', '📁 ทั่วไป'],
+    };
+    const entry = map[cat] || map.general;
+    return t(entry[0], entry[1]);
+  }
+
+  function statusLabel(st) {
+    const map = {
+      draft: ['mtStatusDraft', '📝 กำลังร่าง'],
+      summarized: ['mtStatusSummarized', '✅ สรุปแล้ว'],
+      exported: ['mtStatusExported', '📘 ส่งออกแล้ว'],
+    };
+    const entry = map[st] || map.draft;
+    return t(entry[0], entry[1]);
+  }
+
+  function fmtClockNow() {
+    try {
+      return new Date().toLocaleTimeString(isEn() ? 'en-US' : 'th-TH', { hour12: false });
+    } catch (_) {
+      return new Date().toTimeString().slice(0, 8);
+    }
+  }
 
   function escapeHtml(str) {
     return String(str || '')
@@ -89,34 +140,35 @@
   }
 
   /**
-   * Secretary-Friendly Meeting Minutes Workspace (v1.6.0):
-   * - Designed for non-technical secretaries & office teams (Zero Jargon, 3-Step Flow)
-   * - Step 1: Pick audio/Zoom recording OR live mic record -> 1-Click Cloud AI Transcription
-   * - Step 2: Clean Word-like document editor with click-to-listen, speaker tags & AI Minutes Summary
-   * - Step 3: 1-Click Native Microsoft Word (.DOCX Sarabun font), Copy for LINE, Print/PDF, .TXT
+   * Confidential Local-Only Secretary Meeting Project Workspace (v1.9.0):
+   * - 100% Local Disk-Backed Storage (<app_data_dir>/meetings/<id>.json) — zero cloud storage of confidential minutes
+   * - View A: Multi-Meeting Projects Hub (Full-text search, status/category filters, recurring templates, JSON backup/restore)
+   * - View B: 3-Step Word-style Meeting Editor with 2-line karaoke, speaker tags, AI Summary & 1-click Word (.DOCX)/LINE export
    */
   class DesktopMeetingWorkspace {
     constructor(host) {
       this.host = host;
 
+      this.projects = [];
+      this.activeProjectId = null;
+      this.viewMode = 'hub'; // 'hub' | 'editor'
+      this.filterStatus = 'all';
+      this.filterCategory = 'all';
+      this.filterQuery = '';
+      this._saveDebounceTimer = null;
+      this._initialized = false;
+
+      this.category = 'general';
+      this.status = 'draft';
       this.mediaPath = '';
       this.mediaName = '';
       this.mediaDuration = 0;
-      this.rows = []; // [{ start, speaker, text }]
-      this.speakers = ['ประธานที่ประชุม', 'เลขานุการ', 'ฝ่ายบัญชี/การเงิน', 'ฝ่ายปฏิบัติการ', 'ผู้เข้าร่วม 1'];
-      this.selectedSpeaker = 'ประธานที่ประชุม';
+      this.rows = []; // [{ start, end, speaker, text }]
+      this.speakers = [...DEFAULT_SPEAKERS_TH];
+      this.selectedSpeaker = DEFAULT_SPEAKERS_TH[0];
       this.activeRowIdx = -1;
 
-      this.meta = {
-        title: '',
-        date_str: todayThaiDate(),
-        location: 'ห้องประชุม / ออนไลน์',
-        attendees: '',
-        secretary: '',
-        summary: '',
-        decisions: '',
-        actions: '',
-      };
+      this.meta = this._emptyMeta();
 
       // Live Meeting Recorder state
       this.recording = false;
@@ -130,37 +182,521 @@
       this.recTimer = null;
 
       this.transcribing = false;
-      this._loadDraft();
     }
 
-    _loadDraft() {
+    _emptyMeta() {
+      return {
+        title: '',
+        date_str: todayThaiDate(),
+        location: isEn() ? 'Meeting Room / Online' : 'ห้องประชุม / ออนไลน์',
+        attendees: '',
+        secretary: '',
+        summary: '',
+        decisions: '',
+        actions: '',
+      };
+    }
+
+    _hasTauriDiskStorage() {
+      const tauri = this.host && typeof this.host.getTauri === 'function' ? this.host.getTauri() : null;
+      return !!(tauri && tauri.core && typeof tauri.core.invoke === 'function');
+    }
+
+    async initProjects() {
+      if (this._initialized) return;
+      this._initialized = true;
+
+      let loaded = [];
+      if (this._hasTauriDiskStorage()) {
+        try {
+          const diskList = await this.host.invokeCmd('list_meeting_projects', {});
+          if (Array.isArray(diskList)) loaded = diskList;
+        } catch (_) {}
+      }
+      if (!loaded.length) {
+        try {
+          const raw = localStorage.getItem(PROJECTS_LS_KEY);
+          const arr = raw ? JSON.parse(raw) : [];
+          if (Array.isArray(arr) && arr.length) loaded = arr;
+        } catch (_) {}
+      }
+
+      // Normalize loaded projects
+      this.projects = loaded
+        .filter((p) => p && typeof p === 'object' && p.id)
+        .map((p) => ({
+          id: String(p.id),
+          category: p.category || 'general',
+          status: p.status || 'draft',
+          createdAt: Number(p.createdAt) || Date.now(),
+          updatedAt: Number(p.updatedAt) || Date.now(),
+          mediaPath: p.mediaPath || '',
+          mediaName: p.mediaName || '',
+          mediaDuration: Number(p.mediaDuration) || 0,
+          speakers: Array.isArray(p.speakers) && p.speakers.length ? p.speakers : [...DEFAULT_SPEAKERS_TH],
+          selectedSpeaker: p.selectedSpeaker || (Array.isArray(p.speakers) && p.speakers[0]) || DEFAULT_SPEAKERS_TH[0],
+          rows: Array.isArray(p.rows) ? p.rows : [],
+          meta: { ...this._emptyMeta(), ...(p.meta || {}) },
+        }))
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+      // Zero-loss Auto-Migration from legacy single draft (v1.6.0–v1.8.0)
       try {
-        const raw = localStorage.getItem(DRAFT_KEY);
-        if (!raw) return;
-        const d = JSON.parse(raw);
-        if (d.meta) this.meta = { ...this.meta, ...d.meta };
-        if (Array.isArray(d.rows)) this.rows = d.rows;
-        if (Array.isArray(d.speakers) && d.speakers.length) this.speakers = d.speakers;
-        if (d.mediaPath) this.mediaPath = d.mediaPath;
-        if (d.mediaName) this.mediaName = d.mediaName;
-        if (d.mediaDuration) this.mediaDuration = Number(d.mediaDuration) || 0;
+        const legacyRaw = localStorage.getItem(DRAFT_KEY);
+        if (legacyRaw) {
+          const d = JSON.parse(legacyRaw);
+          const hasContent = !!(
+            (d.meta && (d.meta.title || d.meta.summary || d.meta.decisions || d.meta.actions || d.meta.attendees)) ||
+            (Array.isArray(d.rows) && d.rows.length > 0) ||
+            d.mediaPath
+          );
+          if (hasContent) {
+            const migrated = {
+              id: makeMeetingId(),
+              category: 'general',
+              status: (d.meta && d.meta.summary) ? 'summarized' : 'draft',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              mediaPath: d.mediaPath || '',
+              mediaName: d.mediaName || '',
+              mediaDuration: Number(d.mediaDuration) || 0,
+              speakers: Array.isArray(d.speakers) && d.speakers.length ? d.speakers : [...DEFAULT_SPEAKERS_TH],
+              selectedSpeaker: (Array.isArray(d.speakers) && d.speakers[0]) || DEFAULT_SPEAKERS_TH[0],
+              rows: Array.isArray(d.rows) ? d.rows : [],
+              meta: { ...this._emptyMeta(), ...(d.meta || {}) },
+            };
+            if (!migrated.meta.title) {
+              migrated.meta.title = isEn() ? 'Migrated Meeting Draft' : 'รายงานการประชุม (ย้ายจากฉบับร่างเดิม)';
+            }
+            this.projects.unshift(migrated);
+            await this._persistProjectToStore(migrated);
+          }
+          localStorage.removeItem(DRAFT_KEY);
+        }
+      } catch (_) {}
+
+      this.renderHub();
+    }
+
+    _syncLocalStorageCache() {
+      try {
+        if (!this._hasTauriDiskStorage()) {
+          localStorage.setItem(PROJECTS_LS_KEY, JSON.stringify(this.projects));
+        }
       } catch (_) {}
     }
 
-    _saveDraft() {
+    async _persistProjectToStore(proj) {
+      if (!proj || !proj.id) return;
+      if (this._hasTauriDiskStorage()) {
+        try {
+          await this.host.invokeCmd('save_meeting_project', {
+            id: proj.id,
+            payloadJson: JSON.stringify(proj),
+          });
+        } catch (err) {
+          console.error('save_meeting_project error:', err);
+        }
+      } else {
+        this._syncLocalStorageCache();
+      }
+      const badge = $('mt-save-badge');
+      if (badge) {
+        badge.textContent = `${t('mtSavedLocally', '🔒 บันทึกในเครื่องแล้ว')} • ${fmtClockNow()}`;
+      }
+    }
+
+    _buildCurrentProjectSnapshot() {
+      if (!this.activeProjectId) {
+        this.activeProjectId = makeMeetingId();
+      }
+      const existing = this.projects.find((p) => p.id === this.activeProjectId);
+      const now = Date.now();
+      return {
+        id: this.activeProjectId,
+        category: this.category || 'general',
+        status: this.status || 'draft',
+        createdAt: existing ? existing.createdAt : now,
+        updatedAt: now,
+        mediaPath: this.mediaPath || '',
+        mediaName: this.mediaName || '',
+        mediaDuration: Number(this.mediaDuration) || 0,
+        speakers: [...this.speakers],
+        selectedSpeaker: this.selectedSpeaker || this.speakers[0] || '',
+        rows: this.rows,
+        meta: { ...this.meta },
+      };
+    }
+
+    _saveDraft(immediate = false) {
+      if (!this.activeProjectId && this.viewMode === 'hub') return;
+      const snap = this._buildCurrentProjectSnapshot();
+      const idx = this.projects.findIndex((p) => p.id === snap.id);
+      if (idx >= 0) this.projects[idx] = snap;
+      else this.projects.unshift(snap);
+      this.projects.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+      if (this._saveDebounceTimer) {
+        clearTimeout(this._saveDebounceTimer);
+        this._saveDebounceTimer = null;
+      }
+      if (immediate) {
+        this._persistProjectToStore(snap);
+      } else {
+        this._saveDebounceTimer = setTimeout(() => {
+          this._saveDebounceTimer = null;
+          this._persistProjectToStore(snap);
+        }, 280);
+      }
+    }
+
+    onTabShown() {
+      if (!this._initialized) {
+        this.initProjects();
+      } else if (this.viewMode === 'hub') {
+        this.renderHub();
+      } else {
+        this.syncInputsFromState();
+      }
+    }
+
+    showHub() {
+      if (this.activeProjectId && this.viewMode === 'editor') {
+        this._saveDraft(true);
+      }
+      const audio = $('mt-audio-player');
+      if (audio && !audio.paused) {
+        try { audio.pause(); } catch (_) {}
+      }
+      this.viewMode = 'hub';
+      $('mt-hub-view')?.classList.remove('hidden');
+      $('mt-editor-view')?.classList.add('hidden');
+      this.renderHub();
+    }
+
+    openProject(id) {
+      const proj = this.projects.find((p) => p.id === id);
+      if (!proj) return;
+      this.activeProjectId = proj.id;
+      this.category = proj.category || 'general';
+      this.status = proj.status || 'draft';
+      this.mediaPath = proj.mediaPath || '';
+      this.mediaName = proj.mediaName || '';
+      this.mediaDuration = Number(proj.mediaDuration) || 0;
+      this.speakers = Array.isArray(proj.speakers) && proj.speakers.length ? [...proj.speakers] : [...DEFAULT_SPEAKERS_TH];
+      this.selectedSpeaker = proj.selectedSpeaker || this.speakers[0];
+      this.rows = Array.isArray(proj.rows) ? proj.rows.map((r) => ({ ...r })) : [];
+      this.meta = { ...this._emptyMeta(), ...(proj.meta || {}) };
+      this.activeRowIdx = -1;
+      this._lastKaraokeKey = '';
+
+      if ($('mt-progress-box')) $('mt-progress-box').classList.add('hidden');
+      this.viewMode = 'editor';
+      $('mt-hub-view')?.classList.add('hidden');
+      $('mt-editor-view')?.classList.remove('hidden');
+      this.syncInputsFromState();
+      const badge = $('mt-save-badge');
+      if (badge) badge.textContent = `${t('mtSavedLocally', '🔒 บันทึกในเครื่องแล้ว')}`;
+    }
+
+    async createNewProject(templateProject = null) {
+      if (this.activeProjectId && this.viewMode === 'editor') {
+        this._saveDraft(true);
+      }
+      const now = Date.now();
+      const defaultSpk = isEn() ? [...DEFAULT_SPEAKERS_EN] : [...DEFAULT_SPEAKERS_TH];
+      let proj;
+      if (templateProject) {
+        const baseTitle = (templateProject.meta && templateProject.meta.title) || (isEn() ? 'Meeting' : 'การประชุม');
+        const nextSuffix = isEn() ? ' (Next Session)' : ' (รอบถัดไป)';
+        const cleanBase = baseTitle.replace(/\s*\((รอบถัดไป|Next Session)\)\s*$/i, '').trim();
+        proj = {
+          id: makeMeetingId(),
+          category: templateProject.category || 'general',
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+          mediaPath: '',
+          mediaName: '',
+          mediaDuration: 0,
+          speakers: Array.isArray(templateProject.speakers) && templateProject.speakers.length
+            ? [...templateProject.speakers]
+            : defaultSpk,
+          selectedSpeaker: templateProject.selectedSpeaker || defaultSpk[0],
+          rows: [],
+          meta: {
+            title: `${cleanBase}${nextSuffix}`,
+            date_str: todayThaiDate(),
+            location: (templateProject.meta && templateProject.meta.location) || (isEn() ? 'Meeting Room / Online' : 'ห้องประชุม / ออนไลน์'),
+            attendees: (templateProject.meta && templateProject.meta.attendees) || '',
+            secretary: (templateProject.meta && templateProject.meta.secretary) || '',
+            summary: '',
+            decisions: '',
+            actions: '',
+          },
+        };
+      } else {
+        proj = {
+          id: makeMeetingId(),
+          category: 'general',
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+          mediaPath: '',
+          mediaName: '',
+          mediaDuration: 0,
+          speakers: defaultSpk,
+          selectedSpeaker: defaultSpk[0],
+          rows: [],
+          meta: this._emptyMeta(),
+        };
+      }
+
+      this.projects.unshift(proj);
+      await this._persistProjectToStore(proj);
+      this.openProject(proj.id);
+      this.host.showToast(
+        templateProject
+          ? (isEn() ? '📋 Created next-session project from template (attendees & speakers copied)!' : '📋 สร้างโปรเจกต์รอบถัดไปจากเทมเพลตแล้ว (ดึงรายชื่อผู้เข้าร่วมและผู้พูดมาครบ)!')
+          : (isEn() ? '✨ Created new local confidential meeting project!' : '✨ สร้างโปรเจกต์ประชุมใหม่ในเครื่องเรียบร้อยแล้วครับ!'),
+        'ok'
+      );
+    }
+
+    async deleteProject(id) {
+      const proj = this.projects.find((p) => p.id === id);
+      if (!proj) return;
+      const title = (proj.meta && proj.meta.title) || (isEn() ? 'Untitled Meeting' : 'การประชุมไม่มีชื่อ');
+      const ok = confirm(
+        isEn()
+          ? `Delete meeting project "${title}" from your computer? This cannot be undone.`
+          : `ต้องการลบโปรเจกต์ประชุม "${title}" ออกจากเครื่องใช่หรือไม่? (ไม่สามารถกู้คืนได้)`
+      );
+      if (!ok) return;
+
+      if (this._hasTauriDiskStorage()) {
+        try {
+          await this.host.invokeCmd('delete_meeting_project', { id });
+        } catch (err) {
+          this.host.showToast(String(err), 'err');
+          return;
+        }
+      }
+      this.projects = this.projects.filter((p) => p.id !== id);
+      this._syncLocalStorageCache();
+
+      if (this.activeProjectId === id) {
+        this.activeProjectId = null;
+        this.showHub();
+      } else {
+        this.renderHub();
+      }
+      this.host.showToast(isEn() ? `🗑️ Deleted "${title}"` : `🗑️ ลบโปรเจกต์ "${title}" เรียบร้อย`, 'info');
+    }
+
+    async openLocalMeetingsFolder() {
+      if (!this._hasTauriDiskStorage()) {
+        this.host.showToast(
+          isEn()
+            ? 'In Desktop App, files are stored in AppData/meetings/ on your PC.'
+            : 'บนแอป Desktop ไฟล์ประชุมทุกฉบับเก็บอยู่ในโฟลเดอร์ AppData/meetings/ ในเครื่องคุณ 100% ครับ',
+          'info'
+        );
+        return;
+      }
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({
-          meta: this.meta,
-          rows: this.rows,
-          speakers: this.speakers,
-          mediaPath: this.mediaPath,
-          mediaName: this.mediaName,
-          mediaDuration: this.mediaDuration,
-        }));
-      } catch (_) {}
+        const dir = await this.host.invokeCmd('open_meetings_folder', {});
+        this.host.showToast(`📂 ${dir}`, 'ok');
+      } catch (err) {
+        this.host.showToast(String(err), 'err');
+      }
+    }
+
+    async backupAllProjects() {
+      if (!this.projects.length) {
+        this.host.showToast(isEn() ? 'No meeting projects to back up yet.' : 'ยังไม่มีโปรเจกต์การประชุมให้สำรองข้อมูลครับ', 'info');
+        return;
+      }
+      const payload = JSON.stringify({
+        format: 'autosubai_meeting_workspace_backup',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        count: this.projects.length,
+        projects: this.projects,
+      }, null, 2);
+      const filename = `AutoSubAI_Meetings_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+      try {
+        const tauri = this.host.getTauri();
+        if (tauri && tauri.dialog) {
+          const savePath = await tauri.dialog.save({
+            title: isEn() ? 'Save Local Meeting Archive Backup (.json)' : 'บันทึกไฟล์สำรองคลังงานประชุม (.JSON)',
+            defaultPath: filename,
+            filters: [{ name: 'JSON Backup', extensions: ['json'] }],
+          });
+          if (!savePath) return;
+          await this.host.invokeCmd('write_text_file', { filePath: savePath, content: payload });
+          this.host.showToast(
+            isEn() ? `📦 Backed up ${this.projects.length} meeting projects!` : `📦 สำรองคลังงานประชุม ${this.projects.length} โปรเจกต์เรียบร้อย!`,
+            'ok'
+          );
+          await this.host.invokeCmd('reveal_in_folder', { filePath: savePath }).catch(() => {});
+          return;
+        }
+        // Browser fallback download
+        const blob = new Blob([payload], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+        this.host.showToast(`📦 สำรองคลัง ${this.projects.length} โปรเจกต์สำเร็จ!`, 'ok');
+      } catch (err) {
+        this.host.showToast(String(err), 'err');
+      }
+    }
+
+    async _ingestBackupJsonText(rawText) {
+      const parsed = JSON.parse(String(rawText || '').replace(/^\uFEFF/, ''));
+      const arr = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.projects) ? parsed.projects : []);
+      if (!arr.length) throw new Error(isEn() ? 'No meeting projects found in backup file.' : 'ไม่พบข้อมูลโปรเจกต์การประชุมในไฟล์สำรองนี้');
+      const existingIds = new Set(this.projects.map((p) => p.id));
+      let imported = 0;
+      for (const item of arr) {
+        if (!item || typeof item !== 'object') continue;
+        let id = String(item.id || makeMeetingId()).replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!id || existingIds.has(id)) id = makeMeetingId();
+        existingIds.add(id);
+        const norm = {
+          id,
+          category: item.category || 'general',
+          status: item.status || 'draft',
+          createdAt: Number(item.createdAt) || Date.now(),
+          updatedAt: Number(item.updatedAt) || Date.now(),
+          mediaPath: item.mediaPath || '',
+          mediaName: item.mediaName || '',
+          mediaDuration: Number(item.mediaDuration) || 0,
+          speakers: Array.isArray(item.speakers) && item.speakers.length ? item.speakers : [...DEFAULT_SPEAKERS_TH],
+          selectedSpeaker: item.selectedSpeaker || DEFAULT_SPEAKERS_TH[0],
+          rows: Array.isArray(item.rows) ? item.rows : [],
+          meta: { ...this._emptyMeta(), ...(item.meta || {}) },
+        };
+        this.projects.unshift(norm);
+        await this._persistProjectToStore(norm);
+        imported++;
+      }
+      this.projects.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      this.renderHub();
+      this.host.showToast(
+        isEn() ? `📥 Imported ${imported} meeting projects into your local workspace!` : `📥 นำเข้าโปรเจกต์ประชุม ${imported} รายการลงเครื่องเรียบร้อย!`,
+        'ok'
+      );
+    }
+
+    async importBackupProjects() {
+      try {
+        const tauri = this.host.getTauri();
+        if (tauri && tauri.dialog) {
+          const sel = await tauri.dialog.open({
+            multiple: false,
+            title: isEn() ? 'Import Meeting Workspace Backup (.json)' : 'เลือกไฟล์สำรองคลังงานประชุม (.JSON)',
+            filters: [{ name: 'JSON Backup', extensions: ['json'] }],
+          });
+          if (!sel || Array.isArray(sel)) return;
+          const raw = await this.host.invokeCmd('read_text_file', { filePath: sel });
+          await this._ingestBackupJsonText(raw);
+          return;
+        }
+        $('mt-import-backup-file')?.click();
+      } catch (err) {
+        this.host.showToast(String(err), 'err');
+      }
+    }
+
+    renderHub() {
+      const grid = $('mt-hub-grid');
+      const countEl = $('mt-hub-count');
+      if (!grid) return;
+
+      const q = (this.filterQuery || '').trim().toLowerCase();
+      const filtered = this.projects.filter((p) => {
+        if (this.filterStatus !== 'all' && (p.status || 'draft') !== this.filterStatus) return false;
+        if (this.filterCategory !== 'all' && (p.category || 'general') !== this.filterCategory) return false;
+        if (!q) return true;
+        const m = p.meta || {};
+        const haystack = [
+          m.title, m.date_str, m.location, m.attendees, m.secretary,
+          m.summary, m.decisions, m.actions, p.mediaName,
+          ...(Array.isArray(p.rows) ? p.rows.map((r) => `${r.speaker || ''} ${r.text || ''}`) : []),
+        ].join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
+
+      if (countEl) {
+        countEl.textContent = `${filtered.length}${filtered.length !== this.projects.length ? ` / ${this.projects.length}` : ''} ${t('mtProjectsUnit', 'โปรเจกต์')}`;
+      }
+
+      if (!filtered.length) {
+        const hasAny = this.projects.length > 0;
+        grid.innerHTML = `
+          <div class="mt-hub-empty">
+            <div style="font-size:38px; margin-bottom:8px;">${hasAny ? '🔍' : '📁'}</div>
+            <div style="font-weight:800; font-size:15px; margin-bottom:6px;">
+              ${hasAny ? (isEn() ? 'No matching meeting projects found' : 'ไม่พบโปรเจกต์ประชุมที่ตรงกับคำค้นหา') : escapeHtml(t('mtHubEmptyTitle', 'ยังไม่มีโปรเจกต์การประชุมในคลัง'))}
+            </div>
+            <div class="muted" style="font-size:12.5px; max-width:520px; margin:0 auto 14px;">
+              ${hasAny ? (isEn() ? 'Try clearing the search query or switching filters.' : 'ลองล้างคำค้นหาหรือเปลี่ยนตัวกรองสถานะ/หมวดหมู่ด้านบนครับ') : escapeHtml(t('mtHubEmptySub', 'กดปุ่ม “➕ สร้างโปรเจกต์ประชุมใหม่” เพื่อเริ่มจด/ถอดเสียงการประชุม — ข้อมูลความลับทั้งหมดเก็บในเครื่องของคุณ 100%'))}
+            </div>
+            ${!hasAny ? `<button type="button" class="btn btn-primary" data-mt-hub-create="1">${escapeHtml(t('mtNewProjectBtn', '➕ สร้างโปรเจกต์ประชุมใหม่'))}</button>` : ''}
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.map((p) => {
+        const m = p.meta || {};
+        const title = m.title || (isEn() ? 'Untitled Meeting Minutes' : 'รายงานการประชุม (ยังไม่ตั้งชื่อ)');
+        const excerpt = (m.summary || m.decisions || (p.rows && p.rows[0] && p.rows[0].text) || (isEn() ? 'No summary or transcript yet — click Open Workspace to start.' : 'ยังไม่มีบทสรุปหรือบทถอดเสียง — กดเปิดทำงานเพื่อนำเข้าไฟล์หรืออัดเสียงสด')).replace(/\s+/g, ' ').trim();
+        const st = p.status || 'draft';
+        const cat = p.category || 'general';
+        const rowCnt = Array.isArray(p.rows) ? p.rows.length : 0;
+        const spkCnt = Array.isArray(p.speakers) ? p.speakers.length : 0;
+        const durBadge = p.mediaDuration > 0 ? `<span>⏱️ ${fmtTime(p.mediaDuration)}</span>` : '';
+        const audioBadge = p.mediaName ? `<span title="${escapeHtml(p.mediaName)}">🎙️ ${escapeHtml(p.mediaName.slice(0, 22))}${p.mediaName.length > 22 ? '…' : ''}</span>` : '';
+
+        return `
+          <article class="mt-proj-card" data-mt-proj-card="${escapeHtml(p.id)}">
+            <div class="mt-proj-top">
+              <div class="mt-proj-title" data-mt-open="${escapeHtml(p.id)}">${escapeHtml(title)}</div>
+              <span class="mt-badge-status ${escapeHtml(st)}">${escapeHtml(statusLabel(st))}</span>
+            </div>
+            <div class="mt-proj-badges">
+              <span class="mt-badge-cat">${escapeHtml(catLabel(cat))}</span>
+              <span class="mt-local-pill" style="font-size:10px; padding:1px 7px;">🔒 Local</span>
+            </div>
+            <div class="mt-proj-meta">
+              <span>📅 ${escapeHtml(m.date_str || '-')}</span>
+              ${m.location ? `<span>📍 ${escapeHtml(m.location)}</span>` : ''}
+            </div>
+            <div class="mt-proj-excerpt">${escapeHtml(excerpt)}</div>
+            <div class="mt-proj-stats">
+              <span>💬 ${rowCnt} ${escapeHtml(t('mtRowsUnit', 'ย่อหน้า'))}</span>
+              <span>👤 ${spkCnt} ${escapeHtml(t('mtSpeakersUnit', 'ผู้พูด'))}</span>
+              ${durBadge}
+              ${audioBadge}
+            </div>
+            <div class="mt-proj-actions">
+              <button type="button" class="btn btn-primary btn-xs" data-mt-open="${escapeHtml(p.id)}">${escapeHtml(t('mtOpenProjectBtn', '📝 เปิดทำงาน'))}</button>
+              <button type="button" class="btn btn-secondary btn-xs" data-mt-clone="${escapeHtml(p.id)}" title="${escapeHtml(t('mtCloneTemplateBtn', '📋 ใช้เป็นเทมเพลตรอบหน้า'))}">${escapeHtml(t('mtCloneTemplateBtn', '📋 ใช้เป็นเทมเพลตรอบหน้า'))}</button>
+              <button type="button" class="btn btn-danger-ghost btn-xs" style="margin-left:auto;" data-mt-delete="${escapeHtml(p.id)}" title="ลบโปรเจกต์นี้">🗑️</button>
+            </div>
+          </article>
+        `;
+      }).join('');
     }
 
     syncInputsFromState() {
+      if ($('mt-category-select')) $('mt-category-select').value = this.category || 'general';
+      if ($('mt-status-select')) $('mt-status-select').value = this.status || 'draft';
       if ($('mt-title')) $('mt-title').value = this.meta.title || '';
       if ($('mt-date')) $('mt-date').value = this.meta.date_str || todayThaiDate();
       if ($('mt-location')) $('mt-location').value = this.meta.location || '';
@@ -283,6 +819,9 @@
 
     async loadAudioPath(sel) {
       if (!sel) return;
+      if (this.viewMode !== 'editor' || !this.activeProjectId) {
+        await this.createNewProject(null);
+      }
       this.mediaPath = sel;
       this.mediaName = this.host.getFileName(sel);
       this.mediaDuration = 0;
@@ -669,7 +1208,11 @@
         if ($('mt-summary')) $('mt-summary').value = this.meta.summary;
         if ($('mt-decisions')) $('mt-decisions').value = this.meta.decisions;
         if ($('mt-actions')) $('mt-actions').value = this.meta.actions;
-        this._saveDraft();
+        if (this.status === 'draft') {
+          this.status = 'summarized';
+          if ($('mt-status-select')) $('mt-status-select').value = 'summarized';
+        }
+        this._saveDraft(true);
         if (!silent) this.host.showToast('✨ สรุปประเด็นสำคัญ, มติที่ประชุม และงานติดตามเรียบร้อยแล้ว!', 'ok');
       } finally {
         if (btn) { btn.disabled = false; btn.textContent = '✨ สรุปรายงานการประชุมอัตโนมัติ'; }
@@ -721,6 +1264,9 @@
         const out = await this.host.invokeCmd('export_meeting_docx', {
           req: { ...payload, output_path: savePath },
         });
+        this.status = 'exported';
+        if ($('mt-status-select')) $('mt-status-select').value = 'exported';
+        this._saveDraft(true);
         this.host.showToast(`📘 บันทึกไฟล์ Word (.DOCX) สำเร็จ: ${this.host.getFileName(out)}`, 'ok');
         await this.host.invokeCmd('reveal_in_folder', { filePath: out }).catch(() => {});
       } catch (err) {
@@ -836,6 +1382,78 @@
     }
 
     bindEvents() {
+      // Hub View & Confidential Storage Controls (v1.9.0)
+      $('mt-new-project-btn')?.addEventListener('click', () => this.createNewProject(null));
+      $('mt-open-folder-btn')?.addEventListener('click', () => this.openLocalMeetingsFolder());
+      $('mt-backup-all-btn')?.addEventListener('click', () => this.backupAllProjects());
+      $('mt-import-backup-btn')?.addEventListener('click', () => this.importBackupProjects());
+      $('mt-import-backup-file')?.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          await this._ingestBackupJsonText(text);
+        } catch (err) {
+          this.host.showToast(String(err), 'err');
+        } finally {
+          e.target.value = '';
+        }
+      });
+
+      $('mt-hub-search')?.addEventListener('input', (e) => {
+        this.filterQuery = e.target.value || '';
+        this.renderHub();
+      });
+      document.querySelectorAll('[data-mt-filter-status]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          this.filterStatus = btn.dataset.mtFilterStatus || 'all';
+          document.querySelectorAll('[data-mt-filter-status]').forEach((b) => b.classList.toggle('active', b === btn));
+          this.renderHub();
+        });
+      });
+      $('mt-hub-category-filter')?.addEventListener('change', (e) => {
+        this.filterCategory = e.target.value || 'all';
+        this.renderHub();
+      });
+
+      $('mt-hub-grid')?.addEventListener('click', (e) => {
+        const createBtn = e.target.closest('[data-mt-hub-create]');
+        if (createBtn) {
+          this.createNewProject(null);
+          return;
+        }
+        const openBtn = e.target.closest('[data-mt-open]');
+        if (openBtn) {
+          this.openProject(openBtn.dataset.mtOpen);
+          return;
+        }
+        const cloneBtn = e.target.closest('[data-mt-clone]');
+        if (cloneBtn) {
+          const src = this.projects.find((p) => p.id === cloneBtn.dataset.mtClone);
+          if (src) this.createNewProject(src);
+          return;
+        }
+        const delBtn = e.target.closest('[data-mt-delete]');
+        if (delBtn) {
+          this.deleteProject(delBtn.dataset.mtDelete);
+        }
+      });
+
+      // Editor Top Bar Controls
+      $('mt-back-hub-btn')?.addEventListener('click', () => this.showHub());
+      $('mt-category-select')?.addEventListener('change', (e) => {
+        this.category = e.target.value || 'general';
+        this._saveDraft(true);
+      });
+      $('mt-status-select')?.addEventListener('change', (e) => {
+        this.status = e.target.value || 'draft';
+        this._saveDraft(true);
+      });
+      $('mt-clone-current-btn')?.addEventListener('click', () => {
+        const snap = this._buildCurrentProjectSnapshot();
+        this.createNewProject(snap);
+      });
+
       $('mt-pick-audio-btn')?.addEventListener('click', () => this.pickMeetingAudioFile());
       $('mt-import-text-btn')?.addEventListener('click', () => this.importExistingTranscript());
       $('mt-record-btn')?.addEventListener('click', () => this.toggleLiveMeetingRecord());
@@ -848,25 +1466,16 @@
       $('mt-print-pdf-btn')?.addEventListener('click', () => this.printReportPdf());
       $('mt-export-txt-btn')?.addEventListener('click', () => this.exportPlainText());
       $('mt-clear-btn')?.addEventListener('click', () => {
-        if (!confirm('ต้องการเริ่มรายงานการประชุมฉบับใหม่และล้างข้อมูลเดิมใช่หรือไม่?')) return;
-        this.mediaPath = '';
-        this.mediaName = '';
-        this.mediaDuration = 0;
-        this.rows = [];
-        this.meta = {
-          title: '',
-          date_str: todayThaiDate(),
-          location: 'ห้องประชุม / ออนไลน์',
-          attendees: '',
-          secretary: '',
-          summary: '',
-          decisions: '',
-          actions: '',
-        };
-        if ($('mt-progress-box')) $('mt-progress-box').classList.add('hidden');
-        this._saveDraft();
-        this.syncInputsFromState();
-        this.host.showToast('✨ พร้อมเริ่มรายงานการประชุมฉบับใหม่แล้วครับ', 'info');
+        // v1.9.0: Safe! Never wipes previous meeting — creates a brand-new project in the local archive!
+        this.createNewProject(null);
+      });
+
+      window.addEventListener('autosub-lang-changed', () => {
+        if (this.viewMode === 'hub') this.renderHub();
+        else {
+          const badge = $('mt-save-badge');
+          if (badge) badge.textContent = t('mtSavedLocally', '🔒 บันทึกในเครื่องแล้ว');
+        }
       });
 
       // Persist metadata edits automatically
@@ -1128,7 +1737,7 @@
         audio.addEventListener('loadedmetadata', () => updateKaraoke(true));
       }
 
-      this.syncInputsFromState();
+      this.initProjects();
       updateKaraoke(true);
     }
   }

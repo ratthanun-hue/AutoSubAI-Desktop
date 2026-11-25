@@ -170,7 +170,8 @@
       localWorkspace.render();
     }
     if (tab === 'meeting' && meetingWorkspace) {
-      meetingWorkspace.syncInputsFromState();
+      if (typeof meetingWorkspace.onTabShown === 'function') meetingWorkspace.onTabShown();
+      else meetingWorkspace.syncInputsFromState();
     }
   }
 
