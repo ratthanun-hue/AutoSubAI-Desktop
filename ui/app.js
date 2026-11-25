@@ -671,22 +671,40 @@
         : '💻 ออฟไลน์ในเครื่อง (เวอร์ชั่นฟรี-ไม่หักเครดิต)';
     }
 
+    const isLoggedIn = Boolean(state.token && String(state.token).trim());
+
     if (statusEl && spec) {
-      if (dlInfo) {
+      if (!isLoggedIn) {
+        statusEl.textContent = isEn
+          ? '🔐 Please sign in for free to download and use the local voice model'
+          : '🔐 กรุณาเข้าสู่ระบบฟรี เพื่อดาวน์โหลดและใช้งานโมเดลถอดเสียง';
+        statusEl.style.color = '#fbbf24';
+      } else if (dlInfo) {
         const mb = (dlInfo.size_bytes / (1024 * 1024)).toFixed(1);
-        statusEl.textContent = `✅ โมเดลพร้อมในเครื่องแล้ว (${mb} MB) — ออฟไลน์ 100%`;
+        statusEl.textContent = isEn
+          ? `✅ Model ready on device (${mb} MB) — 100% Offline`
+          : `✅ โมเดลพร้อมในเครื่องแล้ว (${mb} MB) — ออฟไลน์ 100%`;
         statusEl.style.color = '#34d399';
       } else {
-        statusEl.textContent = `⬇️ ยังไม่ได้ดาวน์โหลดโมเดล (~${spec.size_mb || 57} MB • โหลดครั้งเดียว)`;
+        statusEl.textContent = isEn
+          ? `⬇️ Model not downloaded yet (~${spec.size_mb || 148} MB • one-time download)`
+          : `⬇️ ยังไม่ได้ดาวน์โหลดโมเดล (~${spec.size_mb || 148} MB • โหลดครั้งเดียว)`;
         statusEl.style.color = '#fbbf24';
       }
     }
     if (dlBtn) {
-      dlBtn.classList.toggle('hidden', !!dlInfo);
-      dlBtn.disabled = state.offlineDownloading;
+      if (!isLoggedIn) {
+        dlBtn.textContent = isEn ? '🔐 Sign in to Download' : '🔐 เข้าสู่ระบบเพื่อดาวน์โหลด';
+        dlBtn.classList.remove('hidden');
+        dlBtn.disabled = false;
+      } else {
+        dlBtn.textContent = isEn ? '⬇️ Download Model' : '⬇️ ดาวน์โหลดโมเดล';
+        dlBtn.classList.toggle('hidden', !!dlInfo);
+        dlBtn.disabled = state.offlineDownloading;
+      }
     }
     if (delBtn) {
-      delBtn.classList.toggle('hidden', !dlInfo);
+      delBtn.classList.toggle('hidden', !isLoggedIn || !dlInfo);
       delBtn.disabled = state.offlineDownloading;
     }
   }
@@ -723,6 +741,15 @@
   }
 
   async function downloadSelectedOfflineModel() {
+    if (!state.token || !String(state.token).trim()) {
+      showToast('🔐 กรุณาเข้าสู่ระบบฟรี (Google 1 คลิก) ก่อนดาวน์โหลดโมเดลถอดเสียงครับ', 'info');
+      const ap = $('auth-panel');
+      if (ap) {
+        ap.classList.remove('hidden');
+        ap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return;
+    }
     const spec = getActiveOfflineModelSpec();
     if (!spec || state.offlineDownloading) return;
     state.offlineDownloading = true;
@@ -976,13 +1003,22 @@
   async function runQueue() {
     if (state.running) return;
     if (state.plan === 'local-offline') {
+      if (!state.token || !String(state.token).trim()) {
+        showToast('🔐 กรุณาเข้าสู่ระบบฟรี ก่อนเริ่มใช้งานโมเดลถอดเสียงครับ', 'err');
+        const ap = $('auth-panel');
+        if (ap) {
+          ap.classList.remove('hidden');
+          ap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        return;
+      }
       const spec = getActiveOfflineModelSpec();
       if (!spec) {
         showToast('โหมดออฟไลน์ถูกปิดใช้งานชั่วคราวจากเซิร์ฟเวอร์', 'err');
         return;
       }
       if (!isOfflineModelDownloaded(spec.filename)) {
-        showToast(`กรุณากดปุ่ม "⬇️ ดาวน์โหลดโมเดล" (${spec.size_mb || 57} MB) ก่อนเริ่มถอดเสียงออฟไลน์`, 'info');
+        showToast(`กรุณากดปุ่ม "⬇️ ดาวน์โหลดโมเดล" (${spec.size_mb || 148} MB) ก่อนเริ่มถอดเสียงออฟไลน์`, 'info');
         return;
       }
       state.running = true; state.stopRequested = false; renderQueue();
@@ -1236,6 +1272,8 @@
         localStorage.setItem(STORAGE_KEYS.token, state.token);
         state.projectsLoaded = false;
         await refreshProfile();
+        state.selectedOfflineModel = '';
+        await syncOfflineWhisperConfig();
         showToast('Google ID Sign-In successful!', 'ok');
       } catch (err) {
         setAuthError(String(err)); showToast(String(err), 'err');
@@ -1263,7 +1301,10 @@
         if (!res.access_token) throw new Error('No Access Token');
         state.token = res.access_token; localStorage.setItem(STORAGE_KEYS.token, state.token);
         $('login-password').value = ''; state.projectsLoaded = false;
-        await refreshProfile(); showToast('Signed in!', 'ok');
+        await refreshProfile();
+        state.selectedOfflineModel = '';
+        await syncOfflineWhisperConfig();
+        showToast('Signed in!', 'ok');
       } catch (err) { setAuthError(String(err)); } finally { btn.disabled = false; }
     });
 
@@ -1273,7 +1314,13 @@
       const btn = $('apikey-submit-btn'); btn.disabled = true;
       try {
         state.token = key; state.projectsLoaded = false;
-        if (await refreshProfile()) { localStorage.setItem(STORAGE_KEYS.token, key); $('apikey-input').value = ''; showToast('API Key connected!', 'ok'); }
+        if (await refreshProfile()) {
+          localStorage.setItem(STORAGE_KEYS.token, key);
+          $('apikey-input').value = '';
+          state.selectedOfflineModel = '';
+          await syncOfflineWhisperConfig();
+          showToast('API Key connected!', 'ok');
+        }
         else state.token = '';
       } finally { btn.disabled = false; }
     });
@@ -1298,7 +1345,11 @@
     $('credit-pill').addEventListener('click', async () => { await refreshProfile(true); showToast('Credit balance refreshed', 'ok'); });
     $('logout-btn').addEventListener('click', () => {
       state.token = ''; state.profile = null; state.projects = []; state.projectsLoaded = false;
-      localStorage.removeItem(STORAGE_KEYS.token); renderAuthUI(); showToast('Signed out');
+      state.selectedOfflineModel = '';
+      localStorage.removeItem(STORAGE_KEYS.token);
+      renderAuthUI();
+      syncOfflineWhisperConfig();
+      showToast('Signed out');
     });
     $('open-guide-btn')?.addEventListener('click', () => invokeCmd('open_cloud_studio', { url: `${state.apiBase}/guide`, token: null }).catch((e) => showToast(String(e), 'err')));
 
