@@ -115,25 +115,26 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.6.2-beta Release
+      - name: Create or update desktop-v1.7.0-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.6.2-beta
-          name: "AutoSubAI Desktop Pro Studio v1.6.2 Beta — Fixed Meeting Recorder Transcription & Unified Pricing"
+          tag_name: desktop-v1.7.0-beta
+          name: "AutoSubAI Desktop Pro Studio v1.7.0 Beta — Free AI Text-to-Voice Dubbing, Meeting Live Karaoke Sync & Full-Height Transcript"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.6.2 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.7.0 Beta)
 
             ### Downloads (All-in-One with Built-in FFmpeg 6.1.1 & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.6.2_x64-setup.exe` (or `AutoSubAI_1.6.2_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.6.2_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.6.2_x64.dmg`
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.7.0_x64-setup.exe` (or `AutoSubAI_1.7.0_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.7.0_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.7.0_x64.dmg`
 
-            ### What's New & Fixed in v1.6.2 Beta
-            - ✅ **Fixed Meeting Recorder & Audio Upload (`upload_and_transcribe` `filePath` & `probe_media_info` `filePath`)**: Live meeting recordings and imported Zoom/mobile audio files now upload, transcribe, and auto-summarize end-to-end without error!
-            - 💰 **Unified Pricing Alignment**: Updated Desktop cost estimator & plan labels to match `thaiautosub.com` (`Plan 1: ฿0.069/min`, `Plan 2: ฿0.125/min`, `Plan 3: ฿0.245/min`).
-            - ⬆️ **Auto-Update**: Existing `v1.6.1` users will immediately see **`⬆️ Update v1.6.2`** in the top bar!
+            ### What's New in v1.7.0 Beta
+            - 🗣️ **Free AI Text-to-Voice Dubbing (0% Server Load)**: Generate Thai/EN/ZH/JA/KO Neural Voiceover right inside the `🎙️ พากย์เสียง` tab (Single-Clip at Playhead + **1-Click Subtitle-to-Dubbing** with FFmpeg `atempo` Auto Time-Fit + 1-click Mute Original Audio 0% / Duck 15% + automatic OS offline fallback).
+            - 🎤 **Meeting Workspace — Live Timestamp-Synced Karaoke Box**: Watch spoken words highlight word-by-word in sync with the audio playback and see/tag who is speaking at any timestamp with 1 click!
+            - 📐 **Meeting Workspace — Full-Height Transcript Panel + True SRT Timestamps**: Right transcript panel now matches the full height of the left summary panel, and Cloud AI meeting transcriptions now parse exact `srt` timestamps into crisp timecoded segments!
+            - ⬆️ **Auto-Update**: Existing `v1.6.2` users will immediately see **`⬆️ Update v1.7.0`** in the top bar!
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

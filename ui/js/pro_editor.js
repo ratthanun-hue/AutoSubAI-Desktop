@@ -341,7 +341,7 @@
 
         let dur = 5.0;
         try {
-          const info = await this.host.invokeCmd('probe_media_info', { videoPath: sel });
+          const info = await this.host.invokeCmd('probe_media_info', { filePath: sel });
           if (info && Number(info.duration_seconds) > 0.1) dur = Number(info.duration_seconds);
         } catch (_) {}
 
@@ -363,6 +363,177 @@
         this.host.showToast(`🎙️ เพิ่มเสียงพากย์ "${this.host.getFileName(sel)}" ที่ ${fmtSec(start)} แล้ว`, 'ok');
       } catch (err) {
         this.host.showToast(String(err), 'err');
+      }
+    }
+
+    setOriginalDuckPreset(pct) {
+      const val = Math.max(0, Math.min(100, Number(pct) || 0));
+      this.voiceover.original_duck_level = val / 100.0;
+      this.voiceover.duck_original = true;
+      if ($('vo-duck-orig')) $('vo-duck-orig').checked = true;
+      if ($('vo-duck-level')) $('vo-duck-level').value = String(val);
+      if ($('vo-duck-level-val')) $('vo-duck-level-val').textContent = val === 0 ? '0% (ปิดเสียงเดิม)' : `${val}%`;
+      document.querySelectorAll('[data-vo-duck-preset]').forEach((b) => {
+        b.classList.toggle('active', Number(b.dataset.voDuckPreset) === val);
+      });
+    }
+
+    fillTtsFromActiveCue() {
+      const ta = $('vo-tts-text');
+      if (!ta || !this.studio) return;
+      const segs = Array.isArray(this.studio.segments) ? this.studio.segments : [];
+      if (!segs.length) {
+        this.host.showToast('ยังไม่มีข้อความซับในคลิปนี้ครับ', 'info');
+        return;
+      }
+      const video = $('studio-video');
+      const curT = video ? (video.currentTime || 0) : 0;
+      let seg = (this.studio.activeCueIdx >= 0 && segs[this.studio.activeCueIdx])
+        ? segs[this.studio.activeCueIdx]
+        : segs.find((s) => curT >= s.start && curT <= s.end) || segs[0];
+      if (seg) {
+        ta.value = (seg.text || '').trim();
+        this.host.showToast(`📋 ดึงข้อความจากซับเวลา ${fmtSec(seg.start)} เรียบร้อย`, 'info');
+      }
+    }
+
+    async generateAiVoiceoverAtPlayhead() {
+      if (this.ttsBusy) return;
+      const text = ($('vo-tts-text')?.value || '').trim();
+      if (!text) {
+        this.host.showToast('กรุณาพิมพ์ข้อความที่ต้องการให้ AI พากย์ก่อนครับ', 'err');
+        $('vo-tts-text')?.focus();
+        return;
+      }
+      const voice = $('vo-tts-voice')?.value || 'th-TH-PremwadeeNeural';
+      const ratePct = Number($('vo-tts-rate')?.value || 0);
+      const pitchHz = Number($('vo-tts-pitch')?.value || 0);
+      const video = $('studio-video');
+      const start = video ? Number((video.currentTime || 0).toFixed(2)) : 0;
+      const projId = (this.studio && this.studio.projectId) ? String(this.studio.projectId) : 'local';
+
+      const btn = $('vo-tts-gen-btn');
+      this.ttsBusy = true;
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังสร้างเสียงพากย์ AI...'; }
+      try {
+        const res = await this.host.invokeCmd('generate_tts_voiceover', {
+          projectId: projId,
+          text,
+          voice,
+          ratePct,
+          pitchHz,
+          targetDurationSec: null,
+        });
+        const dur = Math.max(0.4, Number(res?.duration || 2.0));
+        this.voiceover.enabled = true;
+        if ($('vo-enabled')) $('vo-enabled').checked = true;
+        const label = `AI: ${text.slice(0, 22)}${text.length > 22 ? '…' : ''}`;
+        this.voiceover.clips.push({
+          id: this.nextVoId++,
+          path: res.path,
+          name: label,
+          start,
+          duration: Number(dur.toFixed(2)),
+          volume: 1.0,
+          audioEl: null,
+        });
+        this.renderVoiceoverList();
+        this.syncTimeline();
+        const engLabel = res.engine === 'os-fallback' ? 'OS Offline Voice' : 'Neural AI Voice';
+        this.host.showToast(`🗣️ สร้างเสียงพากย์ ${engLabel} (${dur.toFixed(1)}s) วางที่ ${fmtSec(start)} สำเร็จ!`, 'ok');
+      } catch (err) {
+        this.host.showToast(`สร้างเสียงพากย์ AI ไม่สำเร็จ: ${err}`, 'err');
+      } finally {
+        this.ttsBusy = false;
+        if (btn) { btn.disabled = false; btn.textContent = '🗣️ สร้างเสียงพากย์ AI (วางที่ Playhead)'; }
+      }
+    }
+
+    async dubAllSubtitlesWithAiVoice() {
+      if (this.ttsBusy) return;
+      const segs = (this.studio && Array.isArray(this.studio.segments))
+        ? this.studio.segments.filter((s) => (s.text || '').trim().length > 0)
+        : [];
+      if (!segs.length) {
+        this.host.showToast('ยังไม่มีซับไตเติลในคลิปนี้ — สร้างซับหรือนำเข้า .SRT ก่อนกดพากย์ทั้งคลิปครับ', 'err');
+        return;
+      }
+      if (this.voiceover.clips.length > 0) {
+        if (!confirm(`พบเสียงพากย์เดิมอยู่ ${this.voiceover.clips.length} ท่อน — ต้องการล้างของเดิมและสร้างเสียงพากย์ AI ใหม่ทั้งคลิป (${segs.length} ประโยค) หรือไม่?`)) {
+          return;
+        }
+        this.pauseAllVoiceoverAudios();
+        this.voiceover.clips = [];
+      }
+
+      const voice = $('vo-tts-voice')?.value || 'th-TH-PremwadeeNeural';
+      const ratePct = Number($('vo-tts-rate')?.value || 0);
+      const pitchHz = Number($('vo-tts-pitch')?.value || 0);
+      const autoFit = $('vo-tts-autofit')?.checked !== false;
+      const projId = (this.studio && this.studio.projectId) ? String(this.studio.projectId) : 'local';
+
+      const btn = $('vo-tts-dub-all-btn');
+      const prog = $('vo-tts-progress');
+      this.ttsBusy = true;
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังพากย์ AI ทั้งคลิป...'; }
+      if (prog) prog.classList.remove('hidden');
+
+      let okCount = 0;
+      let failCount = 0;
+      try {
+        for (let i = 0; i < segs.length; i++) {
+          const s = segs[i];
+          const txt = String(s.text || '').trim();
+          const slotDur = Math.max(0.5, Number(s.end || s.start + 2.5) - Number(s.start || 0));
+          if (prog) {
+            const pct = Math.round(((i + 1) / segs.length) * 100);
+            prog.textContent = `🗣️ กำลังสังเคราะห์ประโยคที่ ${i + 1}/${segs.length} (${pct}%) — "${txt.slice(0, 28)}..."`;
+          }
+          try {
+            const res = await this.host.invokeCmd('generate_tts_voiceover', {
+              projectId: projId,
+              text: txt,
+              voice,
+              ratePct,
+              pitchHz,
+              targetDurationSec: autoFit ? slotDur : null,
+            });
+            const dur = Math.max(0.3, Number(res?.duration || slotDur));
+            this.voiceover.clips.push({
+              id: this.nextVoId++,
+              path: res.path,
+              name: `AI #${i + 1}: ${txt.slice(0, 18)}`,
+              start: Number(Number(s.start || 0).toFixed(2)),
+              duration: Number(dur.toFixed(2)),
+              volume: 1.0,
+              audioEl: null,
+            });
+            okCount++;
+          } catch (_) {
+            failCount++;
+          }
+        }
+        this.voiceover.enabled = true;
+        if ($('vo-enabled')) $('vo-enabled').checked = true;
+        this.renderVoiceoverList();
+        this.syncTimeline();
+        if (okCount > 0) {
+          this.host.showToast(
+            `🎬 พากย์ AI ทั้งคลิปสำเร็จ ${okCount}/${segs.length} ประโยค! แนะนำกด "🔇 ปิดเสียงเดิม 0%" เพื่อแทนเสียงเดิมได้เลย`,
+            'ok'
+          );
+        } else {
+          this.host.showToast('ไม่สามารถสร้างเสียงพากย์ AI ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต', 'err');
+        }
+      } finally {
+        this.ttsBusy = false;
+        if (btn) { btn.disabled = false; btn.textContent = '🎬 พากย์ทั้งคลิปจากซับทั้งหมด (1-Click Auto-Dubbing)'; }
+        if (prog) {
+          prog.textContent = okCount > 0
+            ? `✅ สร้างเสียงพากย์ AI ครบ ${okCount} ท่อน${failCount ? ` (ข้าม ${failCount})` : ''} — พร้อมพรีวิวและส่งออก MP4!`
+            : '';
+          if (!okCount) prog.classList.add('hidden');
+        }
       }
     }
 
@@ -764,6 +935,31 @@
           if (bgmA && this.bgm.enabled && this.bgm.bgm_path) bgmA.play().catch(() => {});
         });
       }
+
+      // AI Text-to-Voice Dubbing controls (v1.7.0)
+      $('vo-tts-rate')?.addEventListener('input', (e) => {
+        const v = Number(e.target.value) || 0;
+        if ($('vo-tts-rate-val')) $('vo-tts-rate-val').textContent = `${v >= 0 ? '+' : ''}${v}%`;
+      });
+      $('vo-tts-pitch')?.addEventListener('input', (e) => {
+        const v = Number(e.target.value) || 0;
+        if ($('vo-tts-pitch-val')) $('vo-tts-pitch-val').textContent = `${v >= 0 ? '+' : ''}${v}Hz`;
+      });
+      $('vo-tts-pull-cue-btn')?.addEventListener('click', () => this.fillTtsFromActiveCue());
+      $('vo-tts-gen-btn')?.addEventListener('click', () => this.generateAiVoiceoverAtPlayhead());
+      $('vo-tts-dub-all-btn')?.addEventListener('click', () => this.dubAllSubtitlesWithAiVoice());
+      document.querySelectorAll('[data-vo-duck-preset]').forEach((btn) => {
+        btn.addEventListener('click', () => this.setOriginalDuckPreset(btn.dataset.voDuckPreset));
+      });
+      $('vo-clear-all-btn')?.addEventListener('click', () => {
+        if (!this.voiceover.clips.length) return;
+        if (!confirm(`ต้องการล้างเสียงพากย์ทั้งหมด ${this.voiceover.clips.length} ท่อนออกจากแทร็ก T3 ใช่หรือไม่?`)) return;
+        this.pauseAllVoiceoverAudios();
+        this.voiceover.clips = [];
+        this.renderVoiceoverList();
+        this.syncTimeline();
+        this.host.showToast('ล้างเสียงพากย์ทั้งหมดบนแทร็ก T3 แล้ว', 'info');
+      });
 
       // Voiceover / Dubbing controls (v1.5.0)
       $('vo-record-btn')?.addEventListener('click', () => this.toggleVoiceoverRecording());

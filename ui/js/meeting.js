@@ -37,10 +37,14 @@
     }
   }
 
+  function parseTsToSec(h, m, s, ms) {
+    return Number(h) * 3600 + Number(m) * 60 + Number(s) + Number(String(ms || '0').padEnd(3, '0').slice(0, 3)) / 1000;
+  }
+
   function parseSrtOrText(raw) {
     const clean = String(raw || '').replace(/^\uFEFF/, '').trim();
     if (!clean) return [];
-    // Detect SRT / VTT timestamps
+    // Detect SRT / VTT timestamps (preserve BOTH start and end!)
     if (clean.includes('-->')) {
       const blocks = clean.split(/\r?\n\r?\n+/);
       const rows = [];
@@ -48,11 +52,16 @@
         const lines = b.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
         const tsIdx = lines.findIndex((l) => l.includes('-->'));
         if (tsIdx === -1) continue;
-        const m = lines[tsIdx].match(/(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/);
-        let sec = 0;
-        if (m) sec = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / 1000;
+        const parts = lines[tsIdx].split('-->');
+        const m1 = (parts[0] || '').match(/(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/) || (parts[0] || '').match(/(\d{1,2}):(\d{2})[,.](\d{1,3})/);
+        const m2 = (parts[1] || '').match(/(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/) || (parts[1] || '').match(/(\d{1,2}):(\d{2})[,.](\d{1,3})/);
+        let start = 0;
+        let end = 0;
+        if (m1) start = m1.length === 5 ? parseTsToSec(m1[1], m1[2], m1[3], m1[4]) : parseTsToSec(0, m1[1], m1[2], m1[3]);
+        if (m2) end = m2.length === 5 ? parseTsToSec(m2[1], m2[2], m2[3], m2[4]) : parseTsToSec(0, m2[1], m2[2], m2[3]);
+        if (end <= start) end = start + 3.0;
         const text = lines.slice(tsIdx + 1).join(' ').trim();
-        if (text) rows.push({ start: Number(sec.toFixed(2)), speaker: '', text });
+        if (text) rows.push({ start: Number(start.toFixed(2)), end: Number(end.toFixed(2)), speaker: '', text });
       }
       if (rows.length) return rows;
     }
@@ -60,7 +69,23 @@
       .split(/\r?\n+/)
       .map((line) => line.trim())
       .filter(Boolean)
-      .map((line, i) => ({ start: i * 5, speaker: '', text: line }));
+      .map((line, i) => ({ start: i * 5, end: (i + 1) * 5, speaker: '', text: line }));
+  }
+
+  function splitKaraokeTokens(text) {
+    const str = String(text || '').trim();
+    if (!str) return [];
+    try {
+      if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+        const seg = new Intl.Segmenter('th', { granularity: 'word' });
+        const out = [];
+        for (const item of seg.segment(str)) {
+          if (item.segment) out.push(item.segment);
+        }
+        if (out.length) return out;
+      }
+    } catch (_) {}
+    return str.match(/\S+\s*/g) || [str];
   }
 
   /**
@@ -195,6 +220,7 @@
           </button>
         `)
         .join('');
+      if (this._updateKaraokeStage) this._updateKaraokeStage(true);
     }
 
     renderTranscript(filterText = '') {
@@ -243,6 +269,7 @@
           </div>
         `)
         .join('');
+      if (this._updateKaraokeStage) this._updateKaraokeStage(true);
     }
 
     async loadAudioPath(sel) {
@@ -502,19 +529,23 @@
           }
         }
 
-        // Group cues cleanly into readable meeting paragraphs (combine short consecutive lines ~15s)
+        // Group cues cleanly into crisp timestamped meeting segments (~8-10s / ~140 chars)
+        // NOTE: Backend poll_job_status returns `srt` (and/or `srt_content` / `vtt` / `segments` / `words`)
         let parsed = [];
-        if (result.srt_content) {
-          parsed = parseSrtOrText(result.srt_content);
+        const rawSrt = result.srt || result.srt_content || result.vtt || '';
+        if (rawSrt && rawSrt.includes('-->')) {
+          parsed = parseSrtOrText(rawSrt);
         } else if (Array.isArray(result.segments) && result.segments.length) {
           parsed = result.segments.map((s) => ({
             start: Number(s.start || 0),
+            end: Number(s.end || (Number(s.start || 0) + 3)),
             speaker: '',
             text: String(s.text || '').trim(),
           })).filter((r) => r.text);
         } else if (Array.isArray(result.words) && result.words.length) {
           parsed = result.words.map((w) => ({
             start: Number(w.start || 0),
+            end: Number(w.end || (Number(w.start || 0) + 0.5)),
             speaker: '',
             text: String(w.text || w.word || '').trim(),
           })).filter((r) => r.text);
@@ -524,11 +555,18 @@
 
         const grouped = [];
         for (const item of parsed) {
+          const itemEnd = Number(item.end) > Number(item.start) ? Number(item.end) : Number(item.start) + 3.0;
           const prev = grouped[grouped.length - 1];
-          if (prev && (item.start - prev.start) <= 14 && (prev.text.length + item.text.length) < 220) {
+          if (prev && (itemEnd - prev.start) <= 10 && (prev.text.length + item.text.length) < 145) {
             prev.text = `${prev.text} ${item.text}`.trim();
+            prev.end = Number(Math.max(prev.end || prev.start, itemEnd).toFixed(2));
           } else {
-            grouped.push({ start: item.start, speaker: '', text: item.text });
+            grouped.push({
+              start: Number(Number(item.start || 0).toFixed(2)),
+              end: Number(itemEnd.toFixed(2)),
+              speaker: '',
+              text: item.text,
+            });
           }
         }
 
@@ -939,29 +977,126 @@
         }
       });
 
-      // Highlight active row during audio playback
+      // Live Karaoke Subtitle Stage synced to audio timestamp (v1.7.0)
+      this._karaokeRaf = null;
+      this._lastKaraokeKey = '';
+
+      const updateKaraoke = (forceRender = false) => {
+        const audioEl = $('mt-audio-player');
+        const t = audioEl ? (audioEl.currentTime || 0) : 0;
+        const totalDur = (audioEl && Number.isFinite(audioEl.duration) && audioEl.duration > 0)
+          ? audioEl.duration
+          : (this.mediaDuration || 0);
+        const timeEl = $('mt-karaoke-time');
+        if (timeEl) timeEl.textContent = `${fmtTime(t)} / ${fmtTime(totalDur)}`;
+
+        if (!this.rows.length) return;
+        let found = -1;
+        for (let i = 0; i < this.rows.length; i++) {
+          const r = this.rows[i];
+          const nextStart = i + 1 < this.rows.length ? Number(this.rows[i + 1].start || 0) : Infinity;
+          const rEnd = Number(r.end) > Number(r.start) ? Math.min(Number(r.end), nextStart) : nextStart;
+          if (t >= Number(r.start || 0) && t < rEnd) {
+            found = i;
+            break;
+          }
+        }
+        if (found < 0 && this.rows.length) {
+          found = t < Number(this.rows[0].start || 0) ? 0 : this.rows.length - 1;
+        }
+
+        if (found !== this.activeRowIdx && found >= 0) {
+          this.activeRowIdx = found;
+          document.querySelectorAll('.mt-row').forEach((el) => {
+            const isAct = Number(el.dataset.mtRow) === found;
+            el.classList.toggle('active', isAct);
+            if (isAct && audioEl && !audioEl.paused) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          });
+        }
+
+        const row = this.rows[found];
+        if (!row) return;
+
+        const spkEl = $('mt-karaoke-speaker');
+        if (spkEl) {
+          spkEl.textContent = row.speaker ? `👤 ${row.speaker}` : '👤 ยังไม่ระบุผู้พูด';
+          spkEl.classList.toggle('has-spk', !!row.speaker);
+        }
+
+        const nextStart = found + 1 < this.rows.length ? Number(this.rows[found + 1].start || 0) : (totalDur > row.start ? totalDur : row.start + 6);
+        const rowStart = Number(row.start || 0);
+        const rowEnd = Number(row.end) > rowStart ? Number(row.end) : Math.max(rowStart + 2, nextStart);
+        const span = Math.max(0.25, rowEnd - rowStart);
+        const progress = Math.max(0, Math.min(1, (t - rowStart) / span));
+
+        const tokens = splitKaraokeTokens(row.text);
+        const totalChars = tokens.reduce((acc, w) => acc + w.length, 0) || 1;
+        const activeCharTarget = progress * totalChars;
+        let accChars = 0;
+        let activeTokIdx = 0;
+        for (let i = 0; i < tokens.length; i++) {
+          accChars += tokens[i].length;
+          if (accChars >= activeCharTarget) {
+            activeTokIdx = i;
+            break;
+          }
+        }
+
+        const key = `${found}:${activeTokIdx}:${row.speaker || ''}:${row.text.length}`;
+        if (!forceRender && key === this._lastKaraokeKey) return;
+        this._lastKaraokeKey = key;
+
+        const box = $('mt-karaoke-text');
+        if (box) {
+          box.innerHTML = tokens
+            .map((tok, i) => {
+              const cls = i < activeTokIdx ? 'mt-k-word done' : (i === activeTokIdx ? 'mt-k-word active' : 'mt-k-word');
+              return `<span class="${cls}">${escapeHtml(tok)}</span>`;
+            })
+            .join('');
+        }
+      };
+
+      this._updateKaraokeStage = updateKaraoke;
+
+      $('mt-karaoke-assign-btn')?.addEventListener('click', () => {
+        const idx = this.activeRowIdx >= 0 ? this.activeRowIdx : 0;
+        if (!this.rows[idx]) {
+          this.host.showToast('ยังไม่มีบทถอดเสียงให้แปะชื่อผู้พูดครับ', 'info');
+          return;
+        }
+        this.rows[idx].speaker = this.selectedSpeaker;
+        this._saveDraft();
+        this.renderTranscript();
+        updateKaraoke(true);
+        this.host.showToast(`🏷️ แปะชื่อ "${this.selectedSpeaker}" ให้ช่วงเวลา ${fmtTime(this.rows[idx].start)} แล้ว!`, 'ok');
+      });
+
       const audio = $('mt-audio-player');
       if (audio) {
-        audio.addEventListener('timeupdate', () => {
-          const t = audio.currentTime || 0;
-          let found = -1;
-          for (let i = 0; i < this.rows.length; i++) {
-            const nextStart = i + 1 < this.rows.length ? this.rows[i + 1].start : Infinity;
-            if (t >= this.rows[i].start && t < nextStart) {
-              found = i;
-              break;
-            }
+        const tickLoop = () => {
+          updateKaraoke(false);
+          if (!audio.paused && !audio.ended) {
+            this._karaokeRaf = requestAnimationFrame(tickLoop);
           }
-          if (found !== this.activeRowIdx && found >= 0) {
-            this.activeRowIdx = found;
-            document.querySelectorAll('.mt-row').forEach((el) => {
-              el.classList.toggle('active', Number(el.dataset.mtRow) === found);
-            });
-          }
+        };
+        audio.addEventListener('play', () => {
+          if (this._karaokeRaf) cancelAnimationFrame(this._karaokeRaf);
+          tickLoop();
         });
+        audio.addEventListener('pause', () => {
+          if (this._karaokeRaf) cancelAnimationFrame(this._karaokeRaf);
+          updateKaraoke(true);
+        });
+        audio.addEventListener('timeupdate', () => updateKaraoke(false));
+        audio.addEventListener('seeked', () => updateKaraoke(true));
+        audio.addEventListener('loadedmetadata', () => updateKaraoke(true));
       }
 
       this.syncInputsFromState();
+      updateKaraoke(true);
     }
   }
 

@@ -1,6 +1,7 @@
 mod ass_builder;
 mod docx_builder;
 mod ffmpeg_engine;
+mod tts_engine;
 
 use ass_builder::{build_ass_document, CueItem, SubtitleStyleConfig};
 use ffmpeg_engine::{
@@ -1337,6 +1338,26 @@ async fn export_meeting_docx(req: docx_builder::MeetingDocxRequest) -> Result<St
     docx_builder::write_meeting_docx(&req).await
 }
 
+#[tauri::command]
+async fn generate_tts_voiceover(
+    project_id: String,
+    text: String,
+    voice: String,
+    rate_pct: i32,
+    pitch_hz: i32,
+    target_duration_sec: Option<f64>,
+) -> Result<tts_engine::TtsResult, String> {
+    tts_engine::synthesize_voiceover_wav(
+        &project_id,
+        &text,
+        &voice,
+        rate_pct,
+        pitch_hz,
+        target_duration_sec,
+    )
+    .await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1365,6 +1386,7 @@ pub fn run() {
             merge_media_clips,
             export_viral_thumbnail,
             save_voiceover_recording,
+            generate_tts_voiceover,
             export_meeting_docx,
             api_submit_feedback,
             api_login,

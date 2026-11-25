@@ -15,7 +15,7 @@
         <div>
           <div class="brand-title">
             AutoSubAI Desktop
-            <span class="badge-beta">v1.6.2 Pro Studio</span>
+            <span class="badge-beta">v1.7.0 Pro Studio</span>
           </div>
           <div class="brand-sub" data-i18n="brandSub">Local &amp; Cloud Drama Subtitling, Style Inspector &amp; Video Finishing</div>
         </div>
@@ -786,9 +786,54 @@
                   </div>
                 </div>
 
-                <!-- Sub-Tab 7: VOICEOVER / DUBBING STUDIO (v1.5.0) -->
+                <!-- Sub-Tab 7: VOICEOVER / DUBBING STUDIO + AI TEXT-TO-VOICE (v1.7.0) -->
                 <div id="insp-pane-voiceover" class="insp-pane hidden">
-                  <div class="vo-rec-card">
+                  <!-- AI Text-to-Voice (Free Neural TTS — 0% Server Load) -->
+                  <div class="vo-tts-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+                      <strong style="font-size:12px; color:#c4b5fd;">🗣️ สร้างเสียงพากย์ AI (Text-to-Voice ฟรี)</strong>
+                      <button id="vo-tts-pull-cue-btn" type="button" class="btn btn-ghost btn-xs" title="ดึงข้อความจากซับบรรทัดที่เลือกอยู่">📋 ดึงจากซับปัจจุบัน</button>
+                    </div>
+                    <div class="insp-field" style="margin:0;">
+                      <label for="vo-tts-voice">เลือกเสียงนักพากย์ AI (Neural Voice)</label>
+                      <select id="vo-tts-voice">
+                        <option value="th-TH-PremwadeeNeural" selected>🇹🇭 หญิงไทย — Premwadee (นุ่มชัด แนะนำ)</option>
+                        <option value="th-TH-NiwatNeural">🇹🇭 ชายไทย — Niwat (ทุ้มน่าเชื่อถือ)</option>
+                        <option value="en-US-JennyNeural">🇺🇸 หญิงอังกฤษ — Jenny</option>
+                        <option value="en-US-GuyNeural">🇺🇸 ชายอังกฤษ — Guy</option>
+                        <option value="zh-CN-XiaoxiaoNeural">🇨🇳 หญิงจีน — Xiaoxiao</option>
+                        <option value="zh-CN-YunxiNeural">🇨🇳 ชายจีน — Yunxi</option>
+                        <option value="ja-JP-NanamiNeural">🇯🇵 หญิงญี่ปุ่น — Nanami</option>
+                        <option value="ko-KR-SunHiNeural">🇰🇷 หญิงเกาหลี — SunHi</option>
+                      </select>
+                    </div>
+                    <div class="insp-grid">
+                      <div class="insp-field" style="margin:0;">
+                        <label>ความเร็วพูด: <strong id="vo-tts-rate-val">+0%</strong></label>
+                        <input id="vo-tts-rate" type="range" min="-30" max="50" value="0" />
+                      </div>
+                      <div class="insp-field" style="margin:0;">
+                        <label>โทนเสียง (Pitch): <strong id="vo-tts-pitch-val">+0Hz</strong></label>
+                        <input id="vo-tts-pitch" type="range" min="-15" max="15" value="0" />
+                      </div>
+                    </div>
+                    <textarea id="vo-tts-text" rows="2" placeholder="พิมพ์ข้อความที่ต้องการให้ AI พากย์ (หรือกดปุ่มพากย์ทั้งคลิปจากซับด้านล่าง)..."></textarea>
+                    <button id="vo-tts-gen-btn" type="button" class="btn btn-cloud-ai-cta btn-sm" style="width:100%; justify-content:center;">
+                      🗣️ สร้างเสียงพากย์ AI (วางที่ Playhead)
+                    </button>
+                    <div style="border-top:1px dashed rgba(167,139,250,0.28); padding-top:7px; display:flex; flex-direction:column; gap:6px;">
+                      <label class="toggle-check" style="font-size:11px;">
+                        <input id="vo-tts-autofit" type="checkbox" checked />
+                        <span>ปรับสปีดอัตโนมัติให้พูดจบพอดีเวลาของแต่ละซับ (Auto Time-Fit)</span>
+                      </label>
+                      <button id="vo-tts-dub-all-btn" type="button" class="btn btn-accent btn-xs" style="width:100%; justify-content:center;">
+                        🎬 พากย์ทั้งคลิปจากซับทั้งหมด (1-Click Auto-Dubbing)
+                      </button>
+                      <div id="vo-tts-progress" class="hidden" style="font-size:11px; color:#c4b5fd;"></div>
+                    </div>
+                  </div>
+
+                  <div class="vo-rec-card" style="margin-top:8px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
                       <strong style="font-size:12px; color:#fda4af;">🎙️ อัดเสียงพากย์สด (Live Dubbing)</strong>
                       <label class="toggle-check" style="font-size:11px;">
@@ -819,12 +864,19 @@
                     <div class="insp-field">
                       <label>ระดับเสียงต้นฉบับขณะพากย์: <strong id="vo-duck-level-val">15%</strong></label>
                       <input id="vo-duck-level" type="range" min="0" max="100" value="15" />
-                      <small class="muted" style="font-size:10.5px;">0% = ปิดเสียงพูดเดิม (พากย์ทับเต็มตัว) • 15% = หรี่เสียงเดิมเบาๆ • 100% = ผสมเท่ากัน</small>
+                      <div class="vo-preset-row">
+                        <button type="button" class="chip-btn" data-vo-duck-preset="0">🔇 ปิดเสียงเดิม 0% (พากย์แทน)</button>
+                        <button type="button" class="chip-btn active" data-vo-duck-preset="15">🎚️ หรี่ 15% (พากย์ทับ)</button>
+                        <button type="button" class="chip-btn" data-vo-duck-preset="50">🔊 50%</button>
+                      </div>
                     </div>
                   </div>
 
                   <div style="margin-top:10px;">
-                    <div style="font-size:11.5px; font-weight:700; color:#e2e8f0; margin-bottom:6px;">รายการเสียงพากย์บนแทร็ก T3 (ลากย้ายบนไทม์ไลน์ได้)</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                      <span style="font-size:11.5px; font-weight:700; color:#e2e8f0;">รายการเสียงพากย์บนแทร็ก T3</span>
+                      <button id="vo-clear-all-btn" type="button" class="btn btn-danger-ghost btn-xs">🗑️ ล้างทั้งหมด</button>
+                    </div>
                     <div id="pro-vo-list" style="display:flex; flex-direction:column; gap:6px;"></div>
                   </div>
                 </div>
@@ -1097,8 +1149,8 @@
                 </div>
               </section>
 
-              <!-- RIGHT: Simple Audio Playback + Speaker Tagger + Clean Transcript -->
-              <section class="card" style="display:flex; flex-direction:column; gap:10px;">
+              <!-- RIGHT: Simple Audio Playback + Live Karaoke Stage + Speaker Tagger + Full-Height Transcript -->
+              <section class="card mt-right-card" style="display:flex; flex-direction:column; gap:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
                   <strong style="font-size:14px;">💬 4. บทถอดเสียงการประชุม (คลิกเวลาเพื่อฟังเสียงทวน)</strong>
                   <span id="mt-row-count" class="mono-tag">0 ย่อหน้า</span>
@@ -1112,6 +1164,18 @@
                     <button type="button" class="chip-btn active" data-mt-speed="1">1x</button>
                     <button type="button" class="chip-btn" data-mt-speed="1.25">1.25x</button>
                     <button type="button" class="chip-btn" data-mt-speed="1.5">1.5x</button>
+                  </div>
+                </div>
+
+                <!-- Live Timestamp-Synced Karaoke Subtitle Stage (v1.7.0) -->
+                <div id="mt-karaoke-box" class="mt-karaoke-box">
+                  <div class="mt-karaoke-head">
+                    <span id="mt-karaoke-speaker" class="mt-karaoke-spk">👤 ยังไม่ระบุผู้พูด</span>
+                    <button id="mt-karaoke-assign-btn" type="button" class="btn btn-ghost btn-xs" title="แปะชื่อผู้พูดที่เลือกไว้ให้ช่วงเวลานี้ทันที">🏷️ แปะชื่อผู้พูดให้ท่อนนี้</button>
+                    <span id="mt-karaoke-time" class="mono-tag" style="margin-left:auto;">00:00 / 00:00</span>
+                  </div>
+                  <div id="mt-karaoke-text" class="mt-karaoke-text">
+                    <span class="muted" style="font-size:13px;">▶️ กดเล่นเสียงประชุมเพื่อดูคำพูดวิ่งตามเวลาแบบคาราโอเกะและระบุผู้พูดได้ทันที</span>
                   </div>
                 </div>
 
