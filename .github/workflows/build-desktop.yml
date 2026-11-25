@@ -129,27 +129,28 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.8.0-beta Release
+      - name: Create or update desktop-v1.9.0-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.8.0-beta
-          name: "AutoSubAI Desktop Pro Studio v1.8.0 Beta — Linux Desktop Support, 100% EN/TH i18n & Live Free Transcription Quota"
+          tag_name: desktop-v1.9.0-beta
+          name: "AutoSubAI Desktop Pro Studio v1.9.0 Beta — Confidential Local-Only Meeting Project Workspace"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.8.0 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.9.0 Beta)
 
             ### Downloads (All-in-One with Built-in FFmpeg 6.1.1 & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.8.0_x64-setup.exe` (or `AutoSubAI_1.8.0_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.8.0_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.8.0_x64.dmg`
-            - **🐧 Linux Desktop (x86_64 — NEW!)**: `AutoSubAI_1.8.0_amd64.AppImage` (Universal) or `AutoSubAI_1.8.0_amd64.deb` (Ubuntu / Debian)
+            - **Windows 10 / 11 (64-bit — Recommended)**: `AutoSubAI_1.9.0_x64-setup.exe` (or `AutoSubAI_1.9.0_x64_en-US.msi`)
+            - **macOS Apple Silicon (M1 / M2 / M3 / M4)**: `AutoSubAI_1.9.0_aarch64.dmg`
+            - **macOS Intel (x86_64)**: `AutoSubAI_1.9.0_x64.dmg`
+            - **🐧 Linux Desktop (x86_64)**: `AutoSubAI_1.9.0_amd64.AppImage` (Universal) or `AutoSubAI_1.9.0_amd64.deb` (Ubuntu / Debian)
 
-            ### What's New in v1.8.0 Beta
-            - 🐧 **Native Linux Desktop Support (`.AppImage` & `.deb`)**: Full Tauri v2 Linux build with bundled static FFmpeg 6.1.1, Thai fonts, Edge Neural v2 / Google AI TTS, and Smart Auto-Updater!
-            - 🌐 **100% Complete English (`EN`) & Thai (`TH`) Localization**: Every new feature — AI Text-to-Voice Dubbing, 5-Track `T3/T2/T1` Solo/Mute Monitor, Secretary Meeting Minutes Mode & 2-Line Karaoke, Cloud AI Modal, Feedback Modal, and Free Quota badges — now switches seamlessly between Thai and English!
-            - 🎁 **Live Free Transcription Quota Meter (`15 Mins/Week • Max 5 Mins/File`)**: Clear topbar pill & Plan 1 `FREE ฿0` badges showing your live remaining weekly free transcription minutes (auto-resets every 7 days) alongside your `฿10` welcome credit!
-            - ⬆️ **Auto-Update**: Existing `v1.7.x` users will immediately see **`⬆️ Update v1.8.0`** in the top bar!
+            ### What's New in v1.9.0 Beta
+            - 🔒 **100% Confidential Local-Only Meeting Project Workspace**: Every meeting report, resolution, attendee list, speaker tag, and transcript is stored strictly as atomic JSON files on your own computer (`AppData/meetings/` — 0% cloud storage, zero browser 5MB limit) for maximum business confidentiality & PDPA privacy!
+            - 📁 **2-View Meeting Projects Hub & Editor**: Manage unlimited meetings side-by-side with Category Tags (`Executive`, `Board`, `Team`, `Client/B2B`, `Interview`), Status Badges (`Draft` / `Summarized` / `Exported`), Full-Text Search across decisions & transcripts, 1-click **Open Local Folder**, and **JSON Archive Backup / Import**.
+            - 📋 **1-Click Recurring Meeting Templates (`Use as Next Template`)**: Clone any recurring board/team meeting into next week's session with all attendees, location, secretary, category, and custom speaker chips pre-filled!
+            - 🔄 **Zero-Loss Auto-Migration & 100% TH/EN Support**: Existing `v1.6–v1.8` meeting drafts automatically migrate into your local archive on first launch.
+            - ⬆️ **Auto-Update**: Existing `v1.8.0` users will immediately see **`⬆️ Update v1.9.0`** in the top bar!
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
