@@ -79,6 +79,7 @@
         solo: null, // null | 't3' | 't2' | 't1'
         mute: { t3: false, t2: false, t1: false },
       };
+      this.auditioningVoId = null;
     }
 
     isTrackAudible(key) {
@@ -194,20 +195,63 @@
     }
 
     pauseAllVoiceoverAudios() {
+      this.auditioningVoId = null;
       for (const c of this.voiceover.clips) {
         if (c.audioEl && !c.audioEl.paused) {
           try { c.audioEl.pause(); } catch (_) {}
         }
       }
+      document.querySelectorAll('[data-vo-play]').forEach((b) => {
+        b.textContent = '▶ ฟัง';
+      });
     }
 
     _ensureVoAudioEl(clip) {
       if (!clip.audioEl && clip.path) {
-        const a = new Audio(this.host.toAssetUrl(clip.path));
+        const url = this.host.toAssetUrl(clip.path);
+        const a = new Audio(url);
         a.preload = 'auto';
+        a.addEventListener('ended', () => {
+          if (this.auditioningVoId === clip.id) {
+            this.auditioningVoId = null;
+            document.querySelectorAll('[data-vo-play]').forEach((b) => {
+              b.textContent = '▶ ฟัง';
+            });
+          }
+        });
         clip.audioEl = a;
       }
       return clip.audioEl;
+    }
+
+    previewVoiceoverClip(idx) {
+      const clip = this.voiceover.clips[idx];
+      if (!clip) return;
+      const wasSame = this.auditioningVoId === clip.id;
+      const video = $('studio-video');
+      if (video && !video.paused) video.pause();
+      this.pauseAllVoiceoverAudios();
+      if (wasSame) return;
+
+      const a = this._ensureVoAudioEl(clip);
+      if (!a) {
+        this.host.showToast('ไม่พบไฟล์เสียงพากย์ของท่อนนี้', 'err');
+        return;
+      }
+      this.auditioningVoId = clip.id;
+      a.muted = false;
+      a.volume = Math.max(0.05, Math.min(1.0, Number(clip.volume) || 1.0));
+      try { a.currentTime = 0; } catch (_) {}
+      const btn = document.querySelector(`[data-vo-play="${idx}"]`);
+      if (btn) btn.textContent = '⏹️ หยุด';
+      const p = a.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch((err) => {
+          this.auditioningVoId = null;
+          if (btn) btn.textContent = '▶ ฟัง';
+          this.host.showToast(`ไม่สามารถเล่นเสียงพากย์ได้: ${err.message || err}`, 'err');
+        });
+      }
     }
 
     updateVoiceoverStart(idx, newStart, commit = false) {
@@ -494,8 +538,10 @@
         });
         this.renderVoiceoverList();
         this.syncTimeline();
-        const engLabel = res.engine === 'os-fallback' ? 'OS Offline Voice' : 'Neural AI Voice';
-        this.host.showToast(`🗣️ สร้างเสียงพากย์ ${engLabel} (${dur.toFixed(1)}s) วางที่ ${fmtSec(start)} สำเร็จ!`, 'ok');
+        const engLabel = res.engine === 'google-tts'
+          ? 'Google AI Voice'
+          : (res.engine === 'os-fallback' ? 'OS Offline Voice' : 'Edge Neural AI Voice');
+        this.host.showToast(`🗣️ สร้างเสียงพากย์ ${engLabel} (${dur.toFixed(1)}s) วางที่ ${fmtSec(start)} สำเร็จ! กด "▶ ฟัง" เพื่อทดสอบได้ทันที`, 'ok');
       } catch (err) {
         this.host.showToast(`สร้างเสียงพากย์ AI ไม่สำเร็จ: ${err}`, 'err');
       } finally {
@@ -604,6 +650,7 @@
           <div class="vo-clip-row">
             <div class="vo-clip-top">
               <button type="button" class="broll-seek" data-vo-seek="${c.start}">🎙️ ${escapeHtml(c.name)}</button>
+              <button type="button" class="btn btn-secondary btn-xs" data-vo-play="${i}" title="กดลองฟังเสียงพากย์ท่อนนี้ทันที">${this.auditioningVoId === c.id ? '⏹️ หยุด' : '▶ ฟัง'}</button>
               <span class="mono-tag">${fmtSec(c.start)} (${Number(c.duration || 0).toFixed(1)}s)</span>
               <button type="button" class="btn btn-danger-ghost btn-xs" data-vo-del="${i}">✕</button>
             </div>
@@ -684,14 +731,19 @@
       if (this.voiceover.enabled && this.voiceover.clips.length > 0 && video) {
         for (const clip of this.voiceover.clips) {
           const end = clip.start + Math.max(0.5, Number(clip.duration) || 3.0);
-          const inRange = t >= clip.start && t <= end;
+          const inRange = t >= clip.start - 0.05 && t <= end;
           const a = this._ensureVoAudioEl(clip);
           if (!a) continue;
+          if (video.paused && this.auditioningVoId === clip.id) {
+            // Keep standalone clip audition playing when user clicked "▶ ฟัง"
+            continue;
+          }
           if (inRange) {
             voSpeaking = true;
             if (!t3Audible) {
               if (!a.paused) a.pause();
             } else {
+              a.muted = false;
               a.volume = Math.max(0, Math.min(1, Number(clip.volume) || 1.0));
               const targetPos = Math.max(0, t - clip.start);
               if (!video.paused) {
@@ -1011,8 +1063,10 @@
           this.pauseAllVoiceoverAudios();
         });
         video.addEventListener('play', () => {
+          if (this.auditioningVoId !== null) this.pauseAllVoiceoverAudios();
           const bgmA = $('studio-bgm-audio');
-          if (bgmA && this.bgm.enabled && this.bgm.bgm_path) bgmA.play().catch(() => {});
+          if (bgmA && this.bgm.enabled && this.bgm.bgm_path && this.isTrackAudible('t1')) bgmA.play().catch(() => {});
+          this.onTimeUpdate(video.currentTime || 0, this.studio ? this.studio.activeCueIdx : -1);
         });
       }
 
@@ -1067,6 +1121,11 @@
         if ($('vo-duck-level-val')) $('vo-duck-level-val').textContent = pct === 0 ? '0% (ปิดเสียงเดิม)' : `${pct}%`;
       });
       $('pro-vo-list')?.addEventListener('click', (e) => {
+        const playBtn = e.target.closest('[data-vo-play]');
+        if (playBtn) {
+          this.previewVoiceoverClip(Number(playBtn.dataset.voPlay));
+          return;
+        }
         const seek = e.target.closest('[data-vo-seek]');
         if (seek && video) {
           video.currentTime = Number(seek.dataset.voSeek) || 0;
