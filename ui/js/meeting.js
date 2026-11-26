@@ -1207,6 +1207,7 @@
         btn.textContent = isOfflineMode ? '🔒 กำลังถอดเสียงในเครื่อง (Built-in)...' : '⏳ กำลังถอดเสียงการประชุม...';
       }
       let tempAudio = null;
+      let cloudJobId = null;
       try {
         let result = null;
         let offlineAccelLabel = '';
@@ -1233,13 +1234,14 @@
           setProg('กำลังส่งเสียงขึ้น AutoSubAI Neural Engine...', 32);
           const up = await this.host.invokeCmd('upload_and_transcribe', {
             filePath: tempAudio,
-            displayFilename: this.mediaName || 'meeting.wav',
+            displayFilename: `__mt_private__${this.mediaName || 'meeting.wav'}`,
             apiBase: this.host.state.apiBase,
             token: this.host.state.token,
             model,
             language: lang,
           });
 
+          cloudJobId = up.job_id || up.id || null;
           result = up;
           if (up.job_id && (!up.srt_content && !up.text && !Array.isArray(up.words))) {
             const jobId = up.job_id;
@@ -1336,6 +1338,18 @@
         if (progBox) progBox.classList.add('hidden');
         this.host.showToast(`ถอดเสียงไม่สำเร็จ: ${err}`, 'err');
       } finally {
+        if (cloudJobId) {
+          const purgeId = cloudJobId;
+          cloudJobId = null;
+          // PDPA Zero-Retention: scrub meeting audio & transcript off cloud server immediately
+          // (keeps billing/usage analytics intact, prevents appearing in Cloud Workspace Projects)
+          await this.host.invokeCmd('api_delete_project', {
+            apiBase: this.host.state.apiBase,
+            token: this.host.state.token,
+            projectId: purgeId,
+          }).catch(() => {});
+          if (this.host && this.host.state) this.host.state.projectsLoaded = false;
+        }
         if (tempAudio) this.host.invokeCmd('cleanup_temp_file', { filePath: tempAudio }).catch(() => {});
         this.transcribing = false;
         if (btn) { btn.disabled = !this.mediaPath; btn.textContent = '✨ ถอดเสียงประชุม + สรุปรายงานอัตโนมัติ'; }
