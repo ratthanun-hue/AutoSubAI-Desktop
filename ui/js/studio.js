@@ -10,6 +10,7 @@
     bg_opacity: 0.72,
     stroke_color: '#000000',
     stroke_width: 2,
+    shadow_depth: 2,
     align: 'center',
     pos_y: 86,
     bilingual_enabled: false,
@@ -20,6 +21,72 @@
   };
 
   const STYLE_PRESETS = {
+    clean: {
+      font_family: 'Prompt',
+      font_size: 26,
+      font_weight: 600,
+      font_color: '#ffffff',
+      bg_color: '#000000',
+      bg_opacity: 0.0,
+      stroke_color: '#000000',
+      stroke_width: 2,
+      shadow_depth: 2,
+      align: 'center',
+      pos_y: 86,
+    },
+    bold: {
+      font_family: 'Kanit',
+      font_size: 32,
+      font_weight: 800,
+      font_color: '#ffffff',
+      bg_color: '#000000',
+      bg_opacity: 0.0,
+      stroke_color: '#000000',
+      stroke_width: 4,
+      shadow_depth: 3,
+      align: 'center',
+      pos_y: 82,
+    },
+    yellow: {
+      font_family: 'Kanit',
+      font_size: 34,
+      font_weight: 800,
+      font_color: '#fde047',
+      bg_color: '#000000',
+      bg_opacity: 0.0,
+      stroke_color: '#000000',
+      stroke_width: 4,
+      shadow_depth: 3,
+      align: 'center',
+      pos_y: 76,
+    },
+    cinema: {
+      font_family: 'Sarabun',
+      font_size: 24,
+      font_weight: 600,
+      font_color: '#f8fafc',
+      bg_color: '#000000',
+      bg_opacity: 0.0,
+      stroke_color: '#000000',
+      stroke_width: 1.5,
+      shadow_depth: 3,
+      align: 'center',
+      pos_y: 88,
+    },
+    minimal: {
+      font_family: 'Prompt',
+      font_size: 22,
+      font_weight: 600,
+      font_color: '#f8fafc',
+      bg_color: '#0f172a',
+      bg_opacity: 0.68,
+      stroke_color: '#000000',
+      stroke_width: 0,
+      shadow_depth: 1,
+      align: 'center',
+      pos_y: 86,
+    },
+    // Backwards-compatible preset aliases
     tv: {
       font_family: 'Prompt',
       font_size: 24,
@@ -29,6 +96,7 @@
       bg_opacity: 0.75,
       stroke_color: '#000000',
       stroke_width: 2,
+      shadow_depth: 2,
       align: 'center',
       pos_y: 86,
     },
@@ -41,22 +109,65 @@
       bg_opacity: 0.0,
       stroke_color: '#000000',
       stroke_width: 4,
+      shadow_depth: 3,
       align: 'center',
       pos_y: 74,
     },
-    cinema: {
-      font_family: 'Sarabun',
-      font_size: 24,
-      font_weight: 700,
-      font_color: '#ffffff',
-      bg_color: '#000000',
-      bg_opacity: 0.0,
-      stroke_color: '#000000',
-      stroke_width: 2.5,
-      align: 'center',
-      pos_y: 88,
-    },
   };
+
+  function wrapThaiSmartText(text, maxChars) {
+    const raw = String(text || '').replace(/\r?\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    if (!raw || raw.length <= maxChars) return raw;
+    let tokens = [];
+    try {
+      if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+        const seg = new Intl.Segmenter('th', { granularity: 'word' });
+        for (const item of seg.segment(raw)) {
+          if (item.segment) tokens.push(item.segment);
+        }
+      }
+    } catch (_) {}
+    if (!tokens.length) tokens = raw.match(/\S+\s*/g) || [raw];
+
+    // Prefer a balanced 2-line split when text fits <= 2.1x maxChars
+    if (raw.length <= Math.round(maxChars * 2.1)) {
+      const target = raw.length / 2;
+      let acc = 0;
+      let bestIdx = -1;
+      let bestDist = Infinity;
+      for (let i = 0; i < tokens.length - 1; i++) {
+        acc += tokens[i].length;
+        const leftLen = acc;
+        const rightLen = raw.length - acc;
+        if (leftLen <= maxChars + 4 && rightLen <= maxChars + 4) {
+          const dist = Math.abs(leftLen - target);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestIdx = i + 1;
+          }
+        }
+      }
+      if (bestIdx > 0) {
+        const l1 = tokens.slice(0, bestIdx).join('').trim();
+        const l2 = tokens.slice(bestIdx).join('').trim();
+        if (l1 && l2) return `${l1}\n${l2}`;
+      }
+    }
+
+    // Greedy word-boundary wrap for longer cues
+    const lines = [];
+    let cur = '';
+    for (const tok of tokens) {
+      if (cur && (cur.length + tok.length) > maxChars) {
+        lines.push(cur.trim());
+        cur = tok.trimStart();
+      } else {
+        cur += tok;
+      }
+    }
+    if (cur.trim()) lines.push(cur.trim());
+    return lines.join('\n');
+  }
 
   const DEFAULT_DELOGO = {
     enabled: false,
@@ -406,17 +517,39 @@
         });
       });
 
-      // Style Presets
+      // Easy Mode <-> Pro NLE Mode Switch
+      document.querySelectorAll('button[data-studio-mode]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          this.setStudioMode(btn.dataset.studioMode, true);
+        });
+      });
+      let savedStudioMode = 'pro';
+      try {
+        const sm = localStorage.getItem('autosub_studio_mode');
+        if (sm === 'easy' || sm === 'pro') savedStudioMode = sm;
+      } catch (_) {}
+      this.setStudioMode(savedStudioMode, false);
+
+      // Style Presets (5 Visual "Aa" Cards)
       document.querySelectorAll('button[data-style-preset]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          const p = STYLE_PRESETS[btn.dataset.stylePreset];
+          const key = btn.dataset.stylePreset;
+          const p = STYLE_PRESETS[key];
           if (!p) return;
           this.style = { ...this.style, ...p };
+          document.querySelectorAll('button[data-style-preset]').forEach((b) => b.classList.toggle('active', b === btn));
           this._syncInspectorInputs();
           this._persistConfigs();
           this.applyLivePreviews();
-          this.host.showToast(`ใช้พรีเซ็ต ${btn.textContent} แล้ว`, 'ok');
+          const lbl = btn.querySelector('.aa-lbl')?.textContent || btn.textContent.trim();
+          this.host.showToast(`ใช้สไตล์ซับ "${lbl}" แล้ว`, 'ok');
         });
+      });
+
+      // Thai Smart Line Break 1-Click Button
+      $('insp-apply-linebreak-btn')?.addEventListener('click', () => {
+        const maxCh = Number($('insp-linebreak-mode')?.value) || 38;
+        this.applyThaiSmartLineBreak(maxCh);
       });
 
       // Style Inspector inputs
@@ -429,6 +562,10 @@
         this.style.bg_opacity = Number($('insp-bg-opacity').value);
         this.style.stroke_color = $('insp-stroke-color').value;
         this.style.stroke_width = Number($('insp-stroke-width').value) || 0;
+        if ($('insp-shadow-depth')) {
+          this.style.shadow_depth = Number($('insp-shadow-depth').value) || 0;
+          if ($('insp-shadow-depth-val')) $('insp-shadow-depth-val').textContent = String(this.style.shadow_depth);
+        }
         this.style.pos_y = Number($('insp-pos-y').value) || 86;
         this.style.karaoke_enabled = $('insp-karaoke-enabled').checked;
         this.style.karaoke_highlight_color = $('insp-karaoke-color').value;
@@ -439,9 +576,11 @@
         this._persistConfigs();
         this.applyLivePreviews();
       };
-      ['insp-font-family', 'insp-font-size', 'insp-font-weight', 'insp-font-color', 'insp-bg-color', 'insp-bg-opacity', 'insp-stroke-color', 'insp-stroke-width', 'insp-pos-y', 'insp-karaoke-enabled', 'insp-karaoke-color'].forEach((id) => {
-        $(id).addEventListener('input', onStyleInput);
-        $(id).addEventListener('change', onStyleInput);
+      ['insp-font-family', 'insp-font-size', 'insp-font-weight', 'insp-font-color', 'insp-bg-color', 'insp-bg-opacity', 'insp-stroke-color', 'insp-stroke-width', 'insp-shadow-depth', 'insp-pos-y', 'insp-karaoke-enabled', 'insp-karaoke-color'].forEach((id) => {
+        const el = $(id);
+        if (!el) return;
+        el.addEventListener('input', onStyleInput);
+        el.addEventListener('change', onStyleInput);
       });
       document.querySelectorAll('button[data-align]').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -743,6 +882,11 @@
       $('insp-bg-opacity-val').textContent = `${Math.round(this.style.bg_opacity * 100)}%`;
       $('insp-stroke-color').value = this.style.stroke_color;
       $('insp-stroke-width').value = this.style.stroke_width;
+      if ($('insp-shadow-depth')) {
+        const sd = Number(this.style.shadow_depth ?? 2);
+        $('insp-shadow-depth').value = sd;
+        if ($('insp-shadow-depth-val')) $('insp-shadow-depth-val').textContent = String(sd);
+      }
       $('insp-pos-y').value = this.style.pos_y;
       $('insp-pos-y-val').textContent = `${this.style.pos_y}%`;
       $('insp-karaoke-enabled').checked = Boolean(this.style.karaoke_enabled);
@@ -966,12 +1110,69 @@
       }
     }
 
+    setStudioMode(mode, persist = true) {
+      const isEasy = mode === 'easy';
+      this.studioMode = isEasy ? 'easy' : 'pro';
+      const view = $('view-studio');
+      if (view) view.classList.toggle('studio-easy-mode', isEasy);
+      document.querySelectorAll('button[data-studio-mode]').forEach((b) => {
+        b.classList.toggle('active', b.dataset.studioMode === this.studioMode);
+      });
+      const tlTitle = $('wf-timeline-title');
+      if (tlTitle) {
+        tlTitle.textContent = isEasy ? '🎞️ Simple 2-Track Timeline' : '🎞️ 5-Track Visual Timeline';
+      }
+      // If switching into Easy Mode while on a Pro-only inspector tab, jump cleanly to Style tab
+      if (isEasy) {
+        const activeTab = document.querySelector('.insp-tab.active');
+        if (activeTab && activeTab.dataset.proTab === '1') {
+          const styleTab = document.querySelector('.insp-tab[data-insp-tab="style"]');
+          if (styleTab) styleTab.click();
+        }
+      }
+      if (this.waveform && typeof this.waveform.setSimpleMode === 'function') {
+        this.waveform.setSimpleMode(isEasy);
+      }
+      if (persist) {
+        try { localStorage.setItem('autosub_studio_mode', this.studioMode); } catch (_) {}
+      }
+    }
+
+    applyThaiSmartLineBreak(maxCharsPerLine = 38) {
+      if (!Array.isArray(this.segments) || !this.segments.length) {
+        this.host.showToast('ยังไม่มีซับไตเติลให้จัดตัดบรรทัดครับ', 'info');
+        return;
+      }
+      const limit = Math.max(12, Math.min(60, Number(maxCharsPerLine) || 38));
+      let changed = 0;
+      for (const seg of this.segments) {
+        const before = String(seg.text || '');
+        const after = wrapThaiSmartText(before, limit);
+        if (after !== before) {
+          seg.text = after;
+          changed++;
+        }
+      }
+      if (changed > 0) {
+        this._markDirty();
+        this.renderSegments();
+        this.renderTimeline();
+        this.applyLivePreviews();
+        this.host.showToast(`✂️ จัดตัดบรรทัดไทยอัจฉริยะเรียบร้อย ${changed} บรรทัด (≤${limit} ตัวอักษร)`, 'ok');
+      } else {
+        this.host.showToast(`✅ ทุกบรรทัดมีความยาวเหมาะสมอยู่แล้ว (≤${limit} ตัวอักษร)`, 'info');
+      }
+    }
+
     setAspectRatio(ar) {
       this.aspectRatio = ar;
       const stage = $('studio-video-stage');
       stage.classList.remove('ar-16-9', 'ar-9-16', 'ar-1-1');
       stage.classList.add(ar === '9:16' ? 'ar-9-16' : (ar === '1:1' ? 'ar-1-1' : 'ar-16-9'));
       document.querySelectorAll('button[data-ar]').forEach((b) => b.classList.toggle('active', b.dataset.ar === ar));
+      // Auto-sync Thai line break dropdown suggestion to chosen aspect ratio
+      const lb = $('insp-linebreak-mode');
+      if (lb) lb.value = ar === '9:16' ? '20' : (ar === '1:1' ? '28' : '38');
     }
 
     setSafeZone(mode) {
@@ -1013,16 +1214,24 @@
       const previewFs = Math.max(11, Math.round(this.style.font_size * 0.72));
       pEl.style.fontSize = `${previewFs}px`;
       pEl.style.color = this.style.font_color;
-      const sw = this.style.stroke_width;
-      const sc = this.style.stroke_color;
-      const shadowStr = sw > 0
-        ? `-${sw}px -${sw}px 0 ${sc}, ${sw}px -${sw}px 0 ${sc}, -${sw}px ${sw}px 0 ${sc}, ${sw}px ${sw}px 0 ${sc}`
-        : 'none';
+      const sw = Number(this.style.stroke_width || 0);
+      const sc = this.style.stroke_color || '#000000';
+      const sd = Number(this.style.shadow_depth ?? 2);
+      const shadowParts = [];
+      if (sw > 0) {
+        shadowParts.push(`-${sw}px -${sw}px 0 ${sc}`, `${sw}px -${sw}px 0 ${sc}`, `-${sw}px ${sw}px 0 ${sc}`, `${sw}px ${sw}px 0 ${sc}`);
+      }
+      if (sd > 0) {
+        shadowParts.push(`0 ${sd}px ${Math.max(2, Math.round(sd * 2.2))}px rgba(0,0,0,0.88)`);
+      }
+      const shadowStr = shadowParts.length ? shadowParts.join(', ') : 'none';
       pEl.style.textShadow = shadowStr;
+      pEl.style.whiteSpace = 'pre-line';
 
       sEl.style.fontSize = `${Math.max(10, Math.round(previewFs * this.style.secondary_scale))}px`;
       sEl.style.color = this.style.secondary_color;
       sEl.style.textShadow = shadowStr;
+      sEl.style.whiteSpace = 'pre-line';
 
       // 2. Delogo / Cover Bar Preview
       const dl = $('studio-delogo-preview');

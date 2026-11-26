@@ -318,10 +318,14 @@
             </div>
 
             <div class="studio-top-actions">
+              <div id="studio-mode-switch" class="studio-mode-switch" role="group" title="สลับโหมดหน้าจอใช้ง่าย (4 แท็บ / 2 แทร็ก) หรือ โหมดมืออาชีพ (9 แท็บ / 5 แทร็ก)">
+                <button type="button" class="studio-mode-btn" data-studio-mode="easy">✨ โหมดใช้ง่าย</button>
+                <button type="button" class="studio-mode-btn active" data-studio-mode="pro">🎬 โหมดโปร (9 แท็บ)</button>
+              </div>
               <button id="studio-cloud-ai-btn" type="button" class="btn btn-cloud-ai-cta btn-sm hidden" data-i18n="btnStudioCloudAi" title="สร้างซับไตเติลอัตโนมัติด้วย AutoSubAI Cloud (ถอดเสียงฟรี 15 น./สัปดาห์)">✨ สร้างซับ Cloud AI</button>
               <button id="studio-import-sub-btn" type="button" class="btn btn-ghost btn-sm" title="Import local .SRT / .VTT into this project">📄 +SRT/VTT</button>
-              <button id="studio-audit-btn" type="button" class="btn btn-ghost btn-sm" data-i18n="btnQualityAudit">🛡️ ตรวจคุณภาพ</button>
-              <button id="studio-summary-btn" type="button" class="btn btn-ghost btn-sm" data-i18n="btnAiSummary">🧠 สรุป AI</button>
+              <button id="studio-audit-btn" type="button" class="btn btn-ghost btn-sm pro-only-btn" data-i18n="btnQualityAudit">🛡️ ตรวจคุณภาพ</button>
+              <button id="studio-summary-btn" type="button" class="btn btn-ghost btn-sm pro-only-btn" data-i18n="btnAiSummary">🧠 สรุป AI</button>
               <button id="studio-save-btn" type="button" class="btn btn-accent btn-sm" data-i18n="btnSaveSync">💾 บันทึก (Cloud+เครื่อง)</button>
               <div class="sub-export-pills">
                 <button id="studio-export-srt-btn" type="button" class="btn btn-ghost btn-xs">.SRT</button>
@@ -358,10 +362,10 @@
                   <button type="button" class="chip-btn active" data-ar="16:9">16:9</button>
                   <button type="button" class="chip-btn" data-ar="9:16">9:16</button>
                   <button type="button" class="chip-btn" data-ar="1:1">1:1</button>
-                  <span class="muted" style="margin-left:4px;" data-i18n="lblSafeZone">Safe Zone:</span>
-                  <button type="button" class="chip-btn active" data-sz="off">Off</button>
-                  <button type="button" class="chip-btn" data-sz="9:16">9:16</button>
-                  <button type="button" class="chip-btn" data-sz="16:9">16:9</button>
+                  <span class="muted pro-only-ctrl" style="margin-left:4px;" data-i18n="lblSafeZone">Safe Zone:</span>
+                  <button type="button" class="chip-btn active pro-only-ctrl" data-sz="off">Off</button>
+                  <button type="button" class="chip-btn pro-only-ctrl" data-sz="9:16">9:16</button>
+                  <button type="button" class="chip-btn pro-only-ctrl" data-sz="16:9">16:9</button>
                   <button id="studio-link-local-btn" type="button" class="btn btn-secondary btn-xs" style="margin-left:4px;" data-i18n="btnLinkLocal">📎 ผูกไฟล์วิดีโอในเครื่อง</button>
                 </div>
               </div>
@@ -424,23 +428,40 @@
               <div class="inspector-box">
                 <div class="inspector-tabs inspector-tabs-8" role="tablist">
                   <button type="button" class="insp-tab active" data-insp-tab="style" data-i18n="inspTabStyle">🎨 สไตล์ซับ</button>
-                  <button type="button" class="insp-tab" data-insp-tab="delogo" data-i18n="inspTabDelogo">🔲 เบลอซับเดิม</button>
-                  <button type="button" class="insp-tab" data-insp-tab="watermark" data-i18n="inspTabWatermark">🏷️ โลโก้ช่อง</button>
+                  <button type="button" class="insp-tab" data-insp-tab="delogo" data-pro-tab="1" data-i18n="inspTabDelogo">🔲 เบลอซับเดิม</button>
+                  <button type="button" class="insp-tab" data-insp-tab="watermark" data-pro-tab="1" data-i18n="inspTabWatermark">🏷️ โลโก้ช่อง</button>
                   <button type="button" class="insp-tab" data-insp-tab="bilingual" data-i18n="inspTabBilingual">🌏 ซับ 2 ภาษา</button>
                   <button type="button" class="insp-tab" data-insp-tab="cutshorts" data-i18n="inspTabCutShorts">✂️ แยก/รวม &amp; 9:16</button>
-                  <button type="button" class="insp-tab" data-insp-tab="colorbgm" data-i18n="inspTabColorBgm">🎚️ สี/สปีด &amp; BGM</button>
-                  <button type="button" class="insp-tab" data-insp-tab="voiceover" data-i18n="inspTabVoiceover">🎙️ พากย์เสียง</button>
-                  <button type="button" class="insp-tab" data-insp-tab="brollthumb" data-i18n="inspTabBrollThumb">🖼️ B-Roll &amp; ปกคลิป</button>
+                  <button type="button" class="insp-tab" data-insp-tab="colorbgm" data-pro-tab="1" data-i18n="inspTabColorBgm">🎚️ สี/สปีด &amp; BGM</button>
+                  <button type="button" class="insp-tab" data-insp-tab="voiceover" data-pro-tab="1" data-i18n="inspTabVoiceover">🎙️ พากย์เสียง</button>
+                  <button type="button" class="insp-tab" data-insp-tab="brollthumb" data-pro-tab="1" data-i18n="inspTabBrollThumb">🖼️ B-Roll &amp; ปกคลิป</button>
                   <button type="button" class="insp-tab" data-insp-tab="glossary" data-i18n="inspTabGlossary">📖 คลังตัวละคร</button>
                 </div>
 
                 <!-- Sub-Tab 1: STYLE INSPECTOR -->
                 <div id="insp-pane-style" class="insp-pane">
-                  <div class="preset-row">
-                    <span class="muted" data-i18n="lblPresets">พรีเซ็ตด่วน:</span>
-                    <button type="button" class="chip-btn" data-style-preset="tv">📺 Classic TV</button>
-                    <button type="button" class="chip-btn" data-style-preset="tiktok">🔥 TikTok Viral</button>
-                    <button type="button" class="chip-btn" data-style-preset="cinema">🎬 Netflix Clean</button>
+                  <!-- 5 Visual "Aa" Style Preset Cards (Clean / Bold / Yellow / Cinema / Minimal) -->
+                  <div class="aa-preset-grid" role="group" aria-label="Style Presets">
+                    <button type="button" class="aa-preset-card" data-style-preset="clean" title="Clean — ขาวสะอาด อ่านง่ายทุกจอ">
+                      <span class="aa-glyph aa-clean">Aa</span>
+                      <span class="aa-lbl">Clean</span>
+                    </button>
+                    <button type="button" class="aa-preset-card" data-style-preset="bold" title="Bold — หนาชัดเจน ขอบเข้ม">
+                      <span class="aa-glyph aa-bold">Aa</span>
+                      <span class="aa-lbl">Bold</span>
+                    </button>
+                    <button type="button" class="aa-preset-card" data-style-preset="yellow" title="Yellow — เหลืองขอบดำสไตล์ TikTok / Reels">
+                      <span class="aa-glyph aa-yellow">Aa</span>
+                      <span class="aa-lbl">Yellow</span>
+                    </button>
+                    <button type="button" class="aa-preset-card" data-style-preset="cinema" title="Cinema — ซับภาพยนตร์เรียบหรู">
+                      <span class="aa-glyph aa-cinema">Aa</span>
+                      <span class="aa-lbl">Cinema</span>
+                    </button>
+                    <button type="button" class="aa-preset-card" data-style-preset="minimal" title="Minimal — แถบพื้นหลังนุ่มนวลสาย Vlog">
+                      <span class="aa-glyph aa-minimal">Aa</span>
+                      <span class="aa-lbl">Minimal</span>
+                    </button>
                   </div>
 
                   <div class="insp-grid">
@@ -450,13 +471,14 @@
                         <option value="Prompt" selected>Prompt (Thai Standard)</option>
                         <option value="Kanit">Kanit (Modern Drama)</option>
                         <option value="Sarabun">Sarabun (Formal)</option>
+                        <option value="Noto Sans Thai">Noto Sans Thai</option>
                         <option value="Inter">Inter (Clean)</option>
                         <option value="Tahoma">Tahoma</option>
                       </select>
                     </div>
                     <div class="insp-field">
                       <label data-i18n="lblFontSize">ขนาด (px)</label>
-                      <input id="insp-font-size" type="number" min="12" max="64" value="24" />
+                      <input id="insp-font-size" type="number" min="12" max="72" value="24" />
                     </div>
                     <div class="insp-field">
                       <label data-i18n="lblFontWeight">ความหนา</label>
@@ -483,10 +505,17 @@
                       </div>
                     </div>
                     <div class="insp-field">
-                      <label data-i18n="lblStroke">ขอบตัวอักษร (px)</label>
+                      <label data-i18n="lblStroke">ขอบตัวอักษร (Outline)</label>
                       <div class="color-row">
                         <input id="insp-stroke-color" type="color" value="#000000" />
                         <input id="insp-stroke-width" type="number" min="0" max="8" step="0.5" value="2" style="width:62px;" />
+                      </div>
+                    </div>
+                    <div class="insp-field">
+                      <label>เงาตัวอักษร (Shadow)</label>
+                      <div class="color-row">
+                        <input id="insp-shadow-depth" type="range" min="0" max="6" step="0.5" value="2" />
+                        <span id="insp-shadow-depth-val" class="mono-tag">2</span>
                       </div>
                     </div>
                     <div class="insp-field">
@@ -504,6 +533,16 @@
                         <span id="insp-pos-y-val" class="mono-tag">86%</span>
                       </div>
                     </div>
+                  </div>
+                  <!-- Thai Smart Line Break 1-Click Bar -->
+                  <div class="linebreak-row">
+                    <span class="muted" style="font-size:11.5px; font-weight:600;">✂️ ตัดบรรทัดไทย:</span>
+                    <select id="insp-linebreak-mode" class="mini-select" style="flex:1;">
+                      <option value="20">แนวตั้ง 9:16 TikTok/Reels (≤20 ตัวอักษร/บรรทัด)</option>
+                      <option value="28">สี่เหลี่ยม 1:1 (≤28 ตัวอักษร/บรรทัด)</option>
+                      <option value="38" selected>แนวนอน 16:9 YouTube/ละคร (≤38 ตัวอักษร/บรรทัด)</option>
+                    </select>
+                    <button id="insp-apply-linebreak-btn" type="button" class="btn btn-secondary btn-xs" title="จัดตัดแบ่ง 2 บรรทัดตามพจนานุกรมคำไทย ไม่ฉีกกลางคำ">✨ จัดตัดทั้งตอน</button>
                   </div>
                   <div class="karaoke-row" style="margin-top:9px; padding-top:8px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
                     <label class="toggle-check">
@@ -1028,7 +1067,7 @@
           <section class="card studio-timeline-dock">
             <div class="waveform-toolbar">
               <div class="transport-group">
-                <span class="muted" style="font-weight:700; color:#e2e8f0;">🎞️ 5-Track Visual Timeline</span>
+                <span id="wf-timeline-title" class="muted" style="font-weight:700; color:#e2e8f0;">🎞️ 5-Track Visual Timeline</span>
                 <button type="button" class="chip-btn active" data-wf-zoom="1">1x</button>
                 <button type="button" class="chip-btn" data-wf-zoom="2">2x</button>
                 <button type="button" class="chip-btn" data-wf-zoom="4">4x</button>
@@ -1038,7 +1077,7 @@
                 <button id="wf-expand-btn" type="button" class="btn btn-ghost btn-xs" title="ขยาย/ย่อความสูงไทม์ไลน์ (หรือลากแถบด้านบน)">⤢ ขยาย/ย่อ</button>
               </div>
               <!-- 5-Track Audio Monitor: Solo (S) / Mute (M) for T3 Voiceover, T2 Original, T1 BGM (v1.7.1) -->
-              <div class="wf-monitor-bar" title="เลือกฟังเสียงอิสระเพื่อเช็กงาน (S = Solo, M = Mute — Preview Only)">
+              <div class="wf-monitor-bar pro-only-ctrl" title="เลือกฟังเสียงอิสระเพื่อเช็กงาน (S = Solo, M = Mute — Preview Only)">
                 <span class="muted" style="font-size:11px; font-weight:700;" data-i18n="wfMonitorLbl">🎧 ฟังเสียง:</span>
                 <span class="wf-trk-ctrl">
                   <span style="color:#fda4af;">T3🎙️</span>
@@ -1059,10 +1098,10 @@
               </div>
               <div class="transport-group">
                 <button id="wf-razor-split-btn" type="button" class="btn btn-secondary btn-xs" title="วางเส้นตัด ณ Playhead [B]">🔪 วางเส้นตัด [B]</button>
-                <button id="wf-set-in-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnSetIn">📍 จุดเริ่ม [I]</button>
-                <button id="wf-set-out-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnSetOut">📍 จุดจบ [O]</button>
-                <button id="wf-cut-zone-btn" type="button" class="btn btn-danger-ghost btn-xs" data-i18n="btnAddCutZone">✂️ ตัดช่วงนี้ออก</button>
-                <button id="wf-clear-cuts-btn" type="button" class="btn btn-ghost btn-xs" data-i18n="btnClearCuts">🧹 ล้างจุดตัด</button>
+                <button id="wf-set-in-btn" type="button" class="btn btn-ghost btn-xs pro-only-ctrl" data-i18n="btnSetIn">📍 จุดเริ่ม [I]</button>
+                <button id="wf-set-out-btn" type="button" class="btn btn-ghost btn-xs pro-only-ctrl" data-i18n="btnSetOut">📍 จุดจบ [O]</button>
+                <button id="wf-cut-zone-btn" type="button" class="btn btn-danger-ghost btn-xs pro-only-ctrl" data-i18n="btnAddCutZone">✂️ ตัดช่วงนี้ออก</button>
+                <button id="wf-clear-cuts-btn" type="button" class="btn btn-ghost btn-xs pro-only-ctrl" data-i18n="btnClearCuts">🧹 ล้างจุดตัด</button>
               </div>
             </div>
             <div id="studio-waveform-wrap" class="waveform-wrap" title="คลิกเพื่อกรอ • ลากขอบบล็อกซับบนแทร็ก T4 • ลากย้ายเสียงพากย์บนแทร็ก T3">

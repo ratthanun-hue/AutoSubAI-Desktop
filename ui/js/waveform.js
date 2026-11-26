@@ -35,6 +35,7 @@
       this.voiceoverClips = []; // [{ id, start, duration, name, volume }]
       this.bgmInfo = { enabled: false, name: '', auto_ducking: true };
       this.watermarkEnabled = false;
+      this.simpleMode = false;
 
       // Video Filmstrip Snapshots state (T2 top lane, Pure-UI Offscreen Video Extractor)
       let savedFilm = true;
@@ -264,11 +265,27 @@
       }
     }
 
+    setSimpleMode(enabled) {
+      this.simpleMode = !!enabled;
+      this.draw();
+    }
+
     _computeLayout() {
       const h = this.height;
       const rulerH = 18;
       const avail = Math.max(120, h - rulerH - 4);
       const showFilm = this._shouldShowFilmstrip();
+
+      if (this.simpleMode) {
+        const t4H = Math.max(42, Math.round(avail * 0.40));
+        const t2H = Math.max(60, avail - t4H - 2);
+        let y = rulerH + 2;
+        const t4 = { y, hh: t4H, bg: 'rgba(139, 92, 246, 0.06)', label: '1 💬 ซับ', key: 't4' }; y += t4H + 2;
+        const t2 = { y, hh: Math.max(54, h - y), bg: 'rgba(56, 189, 248, 0.05)', label: '2 🎬 วิดีโอ', key: 't2' };
+        const hiddenTrack = { y: -100, hh: 0, bg: 'transparent', label: '', key: 'hidden' };
+        return { rulerH, t5: hiddenTrack, t4, t3: hiddenTrack, t2, t1: hiddenTrack, tracks: [t4, t2] };
+      }
+
       const t5H = Math.max(18, Math.round(avail * (showFilm ? 0.11 : 0.13)));
       const t4H = Math.max(28, Math.round(avail * (showFilm ? 0.22 : 0.24)));
       const t3H = Math.max(22, Math.round(avail * (showFilm ? 0.16 : 0.19)));
@@ -561,6 +578,7 @@
       }
 
       // === T5: Watermark + Photo B-Roll Overlays ===
+      if (!this.simpleMode && t5.hh > 0) {
       const brTop = t5.y + 3;
       const brH = Math.max(14, t5.hh - 6);
       if (this.watermarkEnabled) {
@@ -587,19 +605,25 @@
           ctx.restore();
         }
       }
+      }
 
       // === T4: Draggable Subtitle Blocks ===
-      const cueTop = t4.y + 3;
-      const cueH = Math.max(24, t4.hh - 6);
+      const cueTop = t4.y + 4;
+      const cueH = Math.max(24, t4.hh - 8);
       for (let i = 0; i < this.segments.length; i++) {
         const seg = this.segments[i];
         const x1 = this._timeToX(seg.start, w);
         const x2 = Math.max(x1 + 4, this._timeToX(seg.end, w));
         const bw = x2 - x1;
         const isActive = i === this.activeIdx;
-        ctx.fillStyle = isActive ? 'rgba(16, 185, 129, 0.86)' : 'rgba(99, 102, 241, 0.56)';
+        if (this.simpleMode) {
+          ctx.fillStyle = isActive ? 'rgba(139, 92, 246, 0.92)' : 'rgba(99, 102, 241, 0.68)';
+          ctx.strokeStyle = isActive ? '#ddd6fe' : 'rgba(165, 180, 252, 0.55)';
+        } else {
+          ctx.fillStyle = isActive ? 'rgba(16, 185, 129, 0.86)' : 'rgba(99, 102, 241, 0.56)';
+          ctx.strokeStyle = isActive ? '#6ee7b7' : 'rgba(199, 210, 254, 0.45)';
+        }
         ctx.fillRect(x1, cueTop, bw, cueH);
-        ctx.strokeStyle = isActive ? '#6ee7b7' : 'rgba(199, 210, 254, 0.45)';
         ctx.lineWidth = 1;
         ctx.strokeRect(x1 + 0.5, cueTop + 0.5, Math.max(1, bw - 1), cueH - 1);
 
@@ -609,13 +633,14 @@
           ctx.rect(x1 + 4, cueTop, bw - 8, cueH);
           ctx.clip();
           ctx.fillStyle = '#f8fafc';
-          ctx.font = cueH >= 40 ? '12px sans-serif' : '11px sans-serif';
-          ctx.fillText(seg.text || `#${i + 1}`, x1 + 5, cueTop + Math.round(cueH * 0.62));
+          ctx.font = cueH >= 36 ? '12px sans-serif' : '11px sans-serif';
+          ctx.fillText((seg.text || `#${i + 1}`).replace(/\n/g, ' '), x1 + 6, cueTop + Math.round(cueH * 0.62));
           ctx.restore();
         }
       }
 
       // === T3: Voiceover / Dubbing Track ===
+      if (!this.simpleMode && t3.hh > 0) {
       const voTop = t3.y + 3;
       const voH = Math.max(18, t3.hh - 6);
       if (this.voiceoverClips.length > 0) {
@@ -644,6 +669,7 @@
         ctx.fillStyle = 'rgba(251, 113, 133, 0.45)';
         ctx.font = '10.5px sans-serif';
         ctx.fillText('🎙️ Voiceover / เสียงพากย์ (อัดไมค์สดหรือนำเข้าไฟล์ในแท็บ 🎙️ พากย์เสียง • ลากย้ายตำแหน่งได้)', 48, voTop + Math.round(voH * 0.65));
+      }
       }
 
       // === T2: Video Filmstrip Snapshots (Top ~60%) + Audio Waveform Peaks (Bottom ~40%) ===
@@ -725,7 +751,7 @@
       const waveAmp = Math.max(7, Math.round((waveH - 4) / 2));
       if (this.peaks.length > 0) {
         const step = w / this.peaks.length;
-        ctx.fillStyle = 'rgba(129, 140, 248, 0.86)';
+        ctx.fillStyle = this.simpleMode ? 'rgba(56, 189, 248, 0.88)' : 'rgba(129, 140, 248, 0.86)';
         for (let i = 0; i < this.peaks.length; i++) {
           const barH = Math.max(2, this.peaks[i] * waveAmp * 2);
           ctx.fillRect(i * step, waveMid - barH / 2, Math.max(1, step - 0.5), barH);
@@ -739,6 +765,7 @@
       }
 
       // === T1: BGM Music Track + Auto Audio Ducking Visualizer ===
+      if (!this.simpleMode && t1.hh > 0) {
       const bgmTop = t1.y + 3;
       const bgmH = Math.max(16, t1.hh - 6);
       if (this.bgmInfo && this.bgmInfo.enabled && this.bgmInfo.name) {
@@ -772,6 +799,7 @@
         ctx.fillStyle = 'rgba(148, 163, 184, 0.38)';
         ctx.font = '10.5px sans-serif';
         ctx.fillText('🎵 BGM Track (เพิ่มเพลงพื้นหลังในแท็บ 🎚️ สี/สปีด & BGM)', 48, bgmTop + Math.round(bgmH * 0.64));
+      }
       }
 
       // Track badge pills on far left (with live SOLO / MUTE monitor indicators on T3/T2/T1)
