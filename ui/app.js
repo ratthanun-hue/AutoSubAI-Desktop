@@ -279,6 +279,10 @@
       showToast,
       getFileName,
       refreshProfile,
+      getActiveOfflineModelSpec,
+      isOfflineModelDownloaded,
+      downloadSelectedOfflineModel,
+      syncOfflineWhisperConfig,
     });
   }
 
@@ -689,6 +693,10 @@
       const hideActions = isLoggedIn && !!dlInfo && !state.offlineDownloading;
       actionsEl.classList.toggle('hidden', hideActions);
     }
+
+    if (meetingWorkspace && typeof meetingWorkspace.renderOfflineOptionState === 'function') {
+      meetingWorkspace.renderOfflineOptionState();
+    }
   }
 
   async function syncOfflineWhisperConfig() {
@@ -741,6 +749,12 @@
     if (progWrap) progWrap.classList.remove('hidden');
     if (progFill) progFill.style.width = '2%';
     if (progPct) progPct.textContent = '0%';
+    const mtProgWrap = $('mt-offline-dl-progress-wrap');
+    const mtProgFill = $('mt-offline-dl-progress-fill');
+    const mtProgPct = $('mt-offline-dl-progress-pct');
+    if (mtProgWrap) mtProgWrap.classList.remove('hidden');
+    if (mtProgFill) mtProgFill.style.width = '2%';
+    if (mtProgPct) mtProgPct.textContent = '0%';
     renderOfflineModelPanel();
     try {
       await invokeCmd('whisper_download_model', {
@@ -755,6 +769,7 @@
     } finally {
       state.offlineDownloading = false;
       if (progWrap) progWrap.classList.add('hidden');
+      if (mtProgWrap) mtProgWrap.classList.add('hidden');
       renderOfflineModelPanel();
     }
   }
@@ -1445,6 +1460,10 @@
         const txt = $('offline-dl-progress-pct');
         if (fill) fill.style.width = `${pct}%`;
         if (txt) txt.textContent = `${pct}%`;
+        const mtFill = $('mt-offline-dl-progress-fill');
+        const mtTxt = $('mt-offline-dl-progress-pct');
+        if (mtFill) mtFill.style.width = `${pct}%`;
+        if (mtTxt) mtTxt.textContent = `${pct}%`;
       });
       tauri.event.listen('tauri://drag-enter', () => dropZone.classList.add('drag-over'));
       tauri.event.listen('tauri://drag-leave', () => dropZone.classList.remove('drag-over'));

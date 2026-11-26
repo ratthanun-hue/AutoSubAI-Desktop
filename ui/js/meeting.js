@@ -705,10 +705,86 @@
       if ($('mt-summary')) $('mt-summary').value = this.meta.summary || '';
       if ($('mt-decisions')) $('mt-decisions').value = this.meta.decisions || '';
       if ($('mt-actions')) $('mt-actions').value = this.meta.actions || '';
+      this.renderOfflineOptionState();
       this.renderMediaStatus();
       this.renderSpeakerChips();
       this.renderTranscript();
       this._loadAudioPlayer();
+    }
+
+    renderOfflineOptionState() {
+      const sel = $('mt-plan-select');
+      const opt = $('mt-plan-opt-offline');
+      const bar = $('mt-offline-install-bar');
+      const msgEl = $('mt-offline-install-msg');
+      const btn = $('mt-offline-install-btn');
+      const st = (this.host && this.host.state) || {};
+      const cfg = st.offlineConfig;
+      const models = (cfg && Array.isArray(cfg.models)) ? cfg.models : [];
+      const enabled = Boolean(cfg && cfg.offline_whisper_enabled && models.length > 0);
+      const isLoggedIn = Boolean(st.token && String(st.token).trim());
+      const spec = (this.host && typeof this.host.getActiveOfflineModelSpec === 'function')
+        ? this.host.getActiveOfflineModelSpec()
+        : null;
+      const dlInfo = (spec && this.host && typeof this.host.isOfflineModelDownloaded === 'function')
+        ? this.host.isOfflineModelDownloaded(spec.filename)
+        : null;
+      const en = isEn();
+
+      if (opt) {
+        opt.hidden = !enabled;
+        opt.disabled = !enabled;
+        if (isLoggedIn && dlInfo) {
+          opt.textContent = en
+            ? '💻 Free — 0 Credits • Built-in Model (Installed • 100% Offline)'
+            : '💻 ฟรี-ไม่หักเครดิต • โมเดล Built-in (โมเดลติดตั้งสำเร็จ)';
+        } else {
+          opt.textContent = en
+            ? '💻 Free — 0 Credits • Built-in Model (100% Offline)'
+            : '💻 ฟรี-ไม่หักเครดิต • โมเดล Built-in (ออฟไลน์ 100%)';
+        }
+      }
+
+      if (!enabled && sel && sel.value === 'local-offline') {
+        sel.value = 'plan-2';
+      }
+
+      const isOfflineSelected = Boolean(enabled && sel && sel.value === 'local-offline');
+      if (bar) {
+        const hideBar = !isOfflineSelected || (isLoggedIn && !!dlInfo && !st.offlineDownloading);
+        bar.classList.toggle('hidden', hideBar);
+        if (!hideBar) {
+          if (msgEl) {
+            if (!isLoggedIn) {
+              msgEl.textContent = en
+                ? '🔐 Sign in (free) to unlock & install the Built-in Offline Model for 100% local confidential meetings.'
+                : '🔐 กรุณาเข้าสู่ระบบฟรีเพื่อรับสิทธิ์และติดตั้งโมเดล Built-in สำหรับถอดเสียงประชุมในเครื่อง 100%';
+            } else if (st.offlineDownloading) {
+              msgEl.textContent = en
+                ? '⏳ Installing Built-in Model on this computer... please wait.'
+                : '⏳ กำลังติดตั้งโมเดล Built-in ลงในเครื่อง... กรุณารอสักครู่';
+            } else {
+              msgEl.textContent = en
+                ? '🔒 100% Confidential Local Mode — install the Built-in Model once to transcribe meetings completely offline.'
+                : '🔒 โหมดความลับ 100% — ติดตั้งโมเดล Built-in ครั้งเดียว เพื่อถอดเสียงและสรุปการประชุมในเครื่องโดยไม่ส่งไฟล์ออกนอกเครื่อง';
+            }
+          }
+          if (btn) {
+            if (!isLoggedIn) {
+              btn.textContent = en ? '🔐 Sign in to Install Built-in' : '🔐 เข้าสู่ระบบเพื่อติดตั้งโมเดล';
+              btn.disabled = false;
+            } else if (st.offlineDownloading) {
+              btn.textContent = en ? '⏳ Installing...' : '⏳ กำลังติดตั้งโมเดล...';
+              btn.disabled = true;
+            } else {
+              btn.textContent = en ? '⬇️ Install Built-in Model' : '⬇️ ติดตั้งโมเดล Built-in';
+              btn.disabled = false;
+            }
+          }
+        }
+      }
+
+      this.renderMediaStatus();
     }
 
     _loadAudioPlayer() {
@@ -732,16 +808,28 @@
       const box = $('mt-file-status');
       const btn = $('mt-transcribe-btn');
       if (!box) return;
+      const model = $('mt-plan-select')?.value || 'plan-2';
       if (this.mediaPath) {
         const durStr = this.mediaDuration > 0 ? ` • ความยาว ${fmtTime(this.mediaDuration)}` : '';
-        const estMin = Math.max(1, Math.ceil((this.mediaDuration || 60) / 60));
-        const model = $('mt-plan-select')?.value || 'plan-2';
-        const rate = model === 'plan-1' ? 0.069 : (model === 'plan-3' ? 0.245 : 0.125);
-        const estCost = (estMin * rate).toFixed(2);
-        box.innerHTML = `✅ <strong>ไฟล์พร้อมแล้ว:</strong> ${escapeHtml(this.mediaName || this.host.getFileName(this.mediaPath))}${durStr} <span class="mono-tag" style="margin-left:6px;">ประมาณ ฿${estCost}</span>`;
+        if (model === 'local-offline') {
+          const st = (this.host && this.host.state) || {};
+          const maxMins = Number((st.offlineConfig && st.offlineConfig.max_offline_minutes) || 60);
+          const overLimit = this.mediaDuration > 0 && (this.mediaDuration / 60) > maxMins;
+          const limitNote = overLimit
+            ? ` <span style="color:#fbbf24; font-size:11.5px; margin-left:6px;">⚠️ ไฟล์ยาวเกินสิทธิ์ ${maxMins} น./ไฟล์ (แนะนำอัปเกรดแพ็กเกจหรือใช้ Plan 2/3)</span>`
+            : ` <span class="muted" style="font-size:11.5px; margin-left:6px;">(แนะนำใช้ Plan 2/3 หากเสียงก้องหรือต้องการความเร็วสูง)</span>`;
+          box.innerHTML = `✅ <strong>ไฟล์พร้อมแล้ว:</strong> ${escapeHtml(this.mediaName || this.host.getFileName(this.mediaPath))}${durStr} <span class="mono-tag" style="margin-left:6px; border-color:rgba(52,211,153,.45); color:#6ee7b7;">ฟรี ฿0.00 • 🔒 ออฟไลน์ในเครื่อง 100%</span>${limitNote}`;
+        } else {
+          const estMin = Math.max(1, Math.ceil((this.mediaDuration || 60) / 60));
+          const rate = model === 'plan-1' ? 0.069 : (model === 'plan-3' ? 0.245 : 0.125);
+          const estCost = (estMin * rate).toFixed(2);
+          box.innerHTML = `✅ <strong>ไฟล์พร้อมแล้ว:</strong> ${escapeHtml(this.mediaName || this.host.getFileName(this.mediaPath))}${durStr} <span class="mono-tag" style="margin-left:6px;">ประมาณ ฿${estCost}</span>`;
+        }
         if (btn) btn.disabled = this.transcribing;
       } else {
-        box.innerHTML = 'ยังไม่ได้เลือกไฟล์เสียงประชุม — กดปุ่ม <strong>📂 เลือกไฟล์เสียง</strong> หรือ <strong>🔴 อัดเสียงประชุมสด</strong> ด้านบนได้เลยครับ';
+        box.innerHTML = model === 'local-offline'
+          ? '🔒 <strong>โหมด Built-in ออฟไลน์ 100%</strong> — กดปุ่ม <strong>📂 เลือกไฟล์เสียง</strong> หรือ <strong>🔴 อัดเสียงประชุมสด</strong> เพื่อถอดเสียงในเครื่องโดยไม่ส่งไฟล์ออกนอกเครื่องครับ'
+          : 'ยังไม่ได้เลือกไฟล์เสียงประชุม — กดปุ่ม <strong>📂 เลือกไฟล์เสียง</strong> หรือ <strong>🔴 อัดเสียงประชุมสด</strong> ด้านบนได้เลยครับ';
         if (btn) btn.disabled = true;
       }
     }
@@ -1015,15 +1103,40 @@
         this.host.showToast('กรุณาเลือกไฟล์เสียงหรืออัดเสียงประชุมก่อนครับ', 'err');
         return;
       }
-      if (!this.host.state.token || !this.host.state.profile) {
+
+      const model = $('mt-plan-select')?.value || 'plan-2';
+      const lang = $('mt-lang-select')?.value || 'th';
+      const isOfflineMode = model === 'local-offline';
+
+      if (isOfflineMode) {
+        if (!this.host.state.token || !String(this.host.state.token).trim()) {
+          this.host.showToast('🔐 กรุณาเข้าสู่ระบบฟรี ก่อนเริ่มใช้งานโมเดล Built-in ครับ', 'err');
+          const auth = $('auth-panel');
+          if (auth) auth.classList.remove('hidden');
+          return;
+        }
+        const spec = typeof this.host.getActiveOfflineModelSpec === 'function'
+          ? this.host.getActiveOfflineModelSpec()
+          : null;
+        if (!spec) {
+          this.host.showToast('โหมดออฟไลน์ถูกปิดใช้งานชั่วคราวจากเซิร์ฟเวอร์', 'err');
+          return;
+        }
+        const dlInfo = typeof this.host.isOfflineModelDownloaded === 'function'
+          ? this.host.isOfflineModelDownloaded(spec.filename)
+          : null;
+        if (!dlInfo) {
+          this.renderOfflineOptionState();
+          this.host.showToast('กรุณากดปุ่ม "⬇️ ติดตั้งโมเดล Built-in" ก่อนเริ่มถอดเสียงครับ', 'info');
+          return;
+        }
+      } else if (!this.host.state.token || !this.host.state.profile) {
         this.host.showToast('กรุณาเข้าสู่ระบบบัญชี AutoSubAI ก่อนถอดเสียงครับ (สมัครฟรีรับเครดิต ฿10)', 'info');
         const auth = $('auth-panel');
         if (auth) auth.classList.remove('hidden');
         return;
       }
 
-      const model = $('mt-plan-select')?.value || 'plan-2';
-      const lang = $('mt-lang-select')?.value || 'th';
       const btn = $('mt-transcribe-btn');
       const progBox = $('mt-progress-box');
       const setProg = (msg, pct) => {
@@ -1034,45 +1147,67 @@
       };
 
       this.transcribing = true;
-      if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังถอดเสียงการประชุม...'; }
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = isOfflineMode ? '🔒 กำลังถอดเสียงในเครื่อง (Built-in)...' : '⏳ กำลังถอดเสียงการประชุม...';
+      }
       let tempAudio = null;
       try {
-        setProg('กำลังเตรียมไฟล์เสียงคุณภาพสูง (บีบอัดลดขนาด 95%)...', 15);
-        const extracted = await this.host.invokeCmd('extract_audio_local', { videoPath: this.mediaPath });
-        tempAudio = extracted.audio_path;
+        let result = null;
+        let offlineAccelLabel = '';
 
-        setProg('กำลังส่งเสียงขึ้น AutoSubAI Neural Engine...', 32);
-        const up = await this.host.invokeCmd('upload_and_transcribe', {
-          filePath: tempAudio,
-          displayFilename: this.mediaName || 'meeting.wav',
-          apiBase: this.host.state.apiBase,
-          token: this.host.state.token,
-          model,
-          language: lang,
-        });
+        if (isOfflineMode) {
+          const spec = this.host.getActiveOfflineModelSpec();
+          const maxMins = Number((this.host.state.offlineConfig && this.host.state.offlineConfig.max_offline_minutes) || 60);
+          setProg('🔒 กำลังถอดเสียงในเครื่องด้วยโมเดล Built-in (ไม่ส่งไฟล์ออกนอกเครื่อง)...', 30);
+          result = await this.host.invokeCmd('whisper_transcribe_local', {
+            mediaPath: this.mediaPath,
+            modelFilename: spec.filename,
+            language: lang || 'th',
+            maxMinutes: maxMins,
+          });
+          if (result && result.engine) {
+            if (result.engine.includes('Vulkan')) offlineAccelLabel = ' • Vulkan GPU';
+            else if (result.engine.includes('Metal')) offlineAccelLabel = ' • Metal GPU';
+          }
+        } else {
+          setProg('กำลังเตรียมไฟล์เสียงคุณภาพสูง (บีบอัดลดขนาด 95%)...', 15);
+          const extracted = await this.host.invokeCmd('extract_audio_local', { videoPath: this.mediaPath });
+          tempAudio = extracted.audio_path;
 
-        let result = up;
-        if (up.job_id && (!up.srt_content && !up.text && !Array.isArray(up.words))) {
-          const jobId = up.job_id;
-          for (let attempt = 0; attempt < 360; attempt++) {
-            await new Promise((r) => setTimeout(r, 2500));
-            const st = await this.host.invokeCmd('poll_job_status', {
-              apiBase: this.host.state.apiBase,
-              token: this.host.state.token,
-              jobId,
-            });
-            const status = String(st.status || '').toLowerCase();
-            const pct = Math.min(96, Math.max(38, Math.round(Number(st.progress || 50))));
-            const msg = status === 'awaiting_llm' || status === 'refining_llm'
-              ? 'กำลังตรวจทานซับและจัดรูปประโยคการประชุม (AutoSub Mastermind)...'
-              : (st.progress_text || 'กำลังถอดเสียงการประชุม...');
-            setProg(msg, pct);
-            if (status === 'completed' || status === 'done') {
-              result = st;
-              break;
-            }
-            if (status === 'failed' || status === 'error') {
-              throw new Error(st.error_message || st.detail || 'ถอดเสียงไม่สำเร็จ กรุณาลองใหม่');
+          setProg('กำลังส่งเสียงขึ้น AutoSubAI Neural Engine...', 32);
+          const up = await this.host.invokeCmd('upload_and_transcribe', {
+            filePath: tempAudio,
+            displayFilename: this.mediaName || 'meeting.wav',
+            apiBase: this.host.state.apiBase,
+            token: this.host.state.token,
+            model,
+            language: lang,
+          });
+
+          result = up;
+          if (up.job_id && (!up.srt_content && !up.text && !Array.isArray(up.words))) {
+            const jobId = up.job_id;
+            for (let attempt = 0; attempt < 360; attempt++) {
+              await new Promise((r) => setTimeout(r, 2500));
+              const st = await this.host.invokeCmd('poll_job_status', {
+                apiBase: this.host.state.apiBase,
+                token: this.host.state.token,
+                jobId,
+              });
+              const status = String(st.status || '').toLowerCase();
+              const pct = Math.min(96, Math.max(38, Math.round(Number(st.progress || 50))));
+              const msg = status === 'awaiting_llm' || status === 'refining_llm'
+                ? 'กำลังตรวจทานซับและจัดรูปประโยคการประชุม (AutoSub Mastermind)...'
+                : (st.progress_text || 'กำลังถอดเสียงการประชุม...');
+              setProg(msg, pct);
+              if (status === 'completed' || status === 'done') {
+                result = st;
+                break;
+              }
+              if (status === 'failed' || status === 'error') {
+                throw new Error(st.error_message || st.detail || 'ถอดเสียงไม่สำเร็จ กรุณาลองใหม่');
+              }
             }
           }
         }
@@ -1081,15 +1216,15 @@
         // NOTE: Backend poll_job_status returns `srt` (and/or `srt_content` / `vtt` / `segments` / `words`)
         let parsed = [];
         const rawSrt = result.srt || result.srt_content || result.vtt || '';
-        if (rawSrt && rawSrt.includes('-->')) {
-          parsed = parseSrtOrText(rawSrt);
-        } else if (Array.isArray(result.segments) && result.segments.length) {
+        if (Array.isArray(result.segments) && result.segments.length) {
           parsed = result.segments.map((s) => ({
             start: Number(s.start || 0),
             end: Number(s.end || (Number(s.start || 0) + 3)),
             speaker: '',
             text: String(s.text || '').trim(),
           })).filter((r) => r.text);
+        } else if (rawSrt && rawSrt.includes('-->')) {
+          parsed = parseSrtOrText(rawSrt);
         } else if (Array.isArray(result.words) && result.words.length) {
           parsed = result.words.map((w) => ({
             start: Number(w.start || 0),
@@ -1120,13 +1255,28 @@
 
         if (!grouped.length) throw new Error('ไม่พบข้อความเสียงพูดในไฟล์นี้');
         this.rows = grouped;
-        setProg('ถอดเสียงสำเร็จ! กำลังสรุปรายงานการประชุมอัตโนมัติ...', 98);
-        await this.generateMeetingSummary(true);
-        setProg('✅ ถอดเสียงและสรุปรายงานการประชุมเรียบร้อยแล้ว!', 100);
+        setProg(
+          isOfflineMode
+            ? '🔒 ถอดเสียงในเครื่องสำเร็จ! กำลังสรุปรายงานแบบออฟไลน์ในเครื่อง 100%...'
+            : 'ถอดเสียงสำเร็จ! กำลังสรุปรายงานการประชุมอัตโนมัติ...',
+          98
+        );
+        await this.generateMeetingSummary(true, { localOnly: isOfflineMode });
+        setProg(
+          isOfflineMode
+            ? `✅ ถอดเสียงและสรุปในเครื่องเรียบร้อย (ออฟไลน์ 100%${offlineAccelLabel})`
+            : '✅ ถอดเสียงและสรุปรายงานการประชุมเรียบร้อยแล้ว!',
+          100
+        );
         this._saveDraft();
         this.renderTranscript();
-        if (this.host.refreshProfile) this.host.refreshProfile(true).catch(() => {});
-        this.host.showToast(`🎉 ถอดเสียงและสรุปรายงานการประชุมสำเร็จ (${grouped.length} ย่อหน้า)!`, 'ok');
+        if (!isOfflineMode && this.host.refreshProfile) this.host.refreshProfile(true).catch(() => {});
+        this.host.showToast(
+          isOfflineMode
+            ? `🔒 ถอดเสียงและสรุปรายงานในเครื่องสำเร็จ (${grouped.length} ย่อหน้า${offlineAccelLabel} • ฿0.00)!`
+            : `🎉 ถอดเสียงและสรุปรายงานการประชุมสำเร็จ (${grouped.length} ย่อหน้า)!`,
+          'ok'
+        );
       } catch (err) {
         if (progBox) progBox.classList.add('hidden');
         this.host.showToast(`ถอดเสียงไม่สำเร็จ: ${err}`, 'err');
@@ -1137,11 +1287,12 @@
       }
     }
 
-    async generateMeetingSummary(silent = false) {
+    async generateMeetingSummary(silent = false, opts = {}) {
       if (!this.rows.length) {
         if (!silent) this.host.showToast('ยังไม่มีบทถอดเสียงให้สรุปครับ', 'err');
         return;
       }
+      const localOnly = Boolean(opts.localOnly || ($('mt-plan-select')?.value === 'local-offline'));
       const btn = $('mt-summarize-btn');
       if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังสรุปรายงาน...'; }
       try {
@@ -1166,9 +1317,9 @@
           candidates.push(line);
         }
 
-        // Build Executive Summary (optional server extractive summary + local fallback)
+        // Build Executive Summary (skip cloud API completely in Built-in Local-Only mode for 100% confidentiality)
         let summaryLines = [];
-        if (this.host.state.token) {
+        if (!localOnly && this.host.state.token) {
           try {
             const fullText = candidates.join('\n');
             const res = await this.host.invokeCmd('api_summarize_transcript', {
@@ -1458,7 +1609,12 @@
       $('mt-import-text-btn')?.addEventListener('click', () => this.importExistingTranscript());
       $('mt-record-btn')?.addEventListener('click', () => this.toggleLiveMeetingRecord());
       $('mt-transcribe-btn')?.addEventListener('click', () => this.transcribeMeetingAudio());
-      $('mt-plan-select')?.addEventListener('change', () => this.renderMediaStatus());
+      $('mt-plan-select')?.addEventListener('change', () => this.renderOfflineOptionState());
+      $('mt-offline-install-btn')?.addEventListener('click', () => {
+        if (this.host && typeof this.host.downloadSelectedOfflineModel === 'function') {
+          this.host.downloadSelectedOfflineModel();
+        }
+      });
       $('mt-summarize-btn')?.addEventListener('click', () => this.generateMeetingSummary(false));
 
       $('mt-export-docx-btn')?.addEventListener('click', () => this.exportWordDocx());
@@ -1471,6 +1627,7 @@
       });
 
       window.addEventListener('autosub-lang-changed', () => {
+        this.renderOfflineOptionState();
         if (this.viewMode === 'hub') this.renderHub();
         else {
           const badge = $('mt-save-badge');
