@@ -1021,6 +1021,16 @@ fn asset_matches_platform(name: &str) -> bool {
 
 #[tauri::command]
 async fn check_app_update() -> Result<Value, String> {
+    #[cfg(feature = "ms-store")]
+    {
+        return Ok(json!({
+            "has_update": false,
+            "current_version": env!("CARGO_PKG_VERSION"),
+            "managed_by_store": true
+        }));
+    }
+    #[cfg(not(feature = "ms-store"))]
+    {
     let current_ver = env!("CARGO_PKG_VERSION");
     let current_tuple = parse_semver_tuple(current_ver).unwrap_or((0, 0, 0));
 
@@ -1099,6 +1109,7 @@ async fn check_app_update() -> Result<Value, String> {
         "has_update": false,
         "current_version": current_ver
     }))
+    }
 }
 
 #[tauri::command]
@@ -1106,6 +1117,13 @@ async fn download_and_launch_update(
     download_url: String,
     asset_name: String,
 ) -> Result<String, String> {
+    #[cfg(feature = "ms-store")]
+    {
+        let _ = (download_url, asset_name);
+        return Err("เวอร์ชัน Microsoft Store อัปเดตอัตโนมัติผ่าน Microsoft Store".to_string());
+    }
+    #[cfg(not(feature = "ms-store"))]
+    {
     if !download_url.starts_with("https://github.com/ratthanun-hue/AutoSubAI-Desktop/releases/download/") {
         return Err("ลิงก์อัปเดตไม่อยู่ในแหล่งดาวน์โหลดที่ได้รับอนุญาต".to_string());
     }
@@ -1177,6 +1195,7 @@ async fn download_and_launch_update(
     }
 
     Ok(dest_str)
+    }
 }
 
 #[tauri::command]
@@ -1357,7 +1376,15 @@ async fn api_submit_feedback(
 
 #[tauri::command]
 async fn check_ui_patch_update(app: AppHandle) -> Result<Value, String> {
-    patch_engine::check_ui_patch_update(&app).await
+    #[cfg(feature = "ms-store")]
+    {
+        let _ = app;
+        return Ok(json!({ "has_update": false, "managed_by_store": true }));
+    }
+    #[cfg(not(feature = "ms-store"))]
+    {
+        patch_engine::check_ui_patch_update(&app).await
+    }
 }
 
 #[tauri::command]
@@ -1365,12 +1392,28 @@ async fn apply_ui_patch(
     app: AppHandle,
     manifest: patch_engine::PatchManifest,
 ) -> Result<Value, String> {
-    patch_engine::apply_ui_patch(&app, manifest).await
+    #[cfg(feature = "ms-store")]
+    {
+        let _ = (app, manifest);
+        return Err("เวอร์ชัน Microsoft Store จัดการอัปเดตผ่าน Microsoft Store".to_string());
+    }
+    #[cfg(not(feature = "ms-store"))]
+    {
+        patch_engine::apply_ui_patch(&app, manifest).await
+    }
 }
 
 #[tauri::command]
 async fn get_active_ui_patch_bundle(app: AppHandle) -> Result<Value, String> {
-    patch_engine::get_active_ui_patch_bundle(&app)
+    #[cfg(feature = "ms-store")]
+    {
+        let _ = app;
+        return Ok(json!({ "active": false, "managed_by_store": true }));
+    }
+    #[cfg(not(feature = "ms-store"))]
+    {
+        patch_engine::get_active_ui_patch_bundle(&app)
+    }
 }
 
 #[tauri::command]

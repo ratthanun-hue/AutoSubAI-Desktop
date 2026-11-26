@@ -160,6 +160,16 @@ jobs:
             -exec cp -v {} release_files/ \;
           ls -lh release_files/
 
+      - name: Build Microsoft Store .MSIX Package (Windows x64 — Policy 10.2 ms-store flag)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          npx tauri build --no-bundle -- --features ms-store
+          if ($LASTEXITCODE -ne 0) { throw "ms-store build failed with code $LASTEXITCODE" }
+          pwsh -ExecutionPolicy Bypass -File scripts/build_msix.ps1 -Version "1.11.0.0" -OutDir "release_files"
+          Get-ChildItem release_files | Select-Object Name, @{N='SizeMB';E={[Math]::Round($_.Length/1MB,2)}}
+
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -181,26 +191,28 @@ jobs:
       - name: List collected installers
         run: ls -lh release_assets/
 
-      - name: Create or update desktop-v1.10.2-beta Release
+      - name: Create or update desktop-v1.11.0-beta Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.10.2-beta
-          name: "AutoSubAI Desktop Pro Studio v1.10.2 Beta — Windows Vulkan GPU Acceleration + Local Workspace Auto-Save"
+          tag_name: desktop-v1.11.0-beta
+          name: "AutoSubAI Desktop Pro Studio v1.11.0 — Microsoft Store .MSIX, Easy Mode <-> Pro NLE, 5 Aa Styles & Meeting Offline Mode"
           prerelease: true
           make_latest: true
           body: |
-            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.10.2 Beta)
+            ## AutoSubAI Native Desktop Pro Studio (Tauri v2 — v1.11.0)
 
             ### Downloads (All-in-One with Built-in FFmpeg 6.1.1, Static whisper.cpp GPU & Thai Fonts)
-            - **Windows 10 / 11 (64-bit — Vulkan GPU for NVIDIA / AMD / Intel + Auto CPU Fallback)**: `AutoSubAI_1.10.2_x64-setup.exe` (or `AutoSubAI_1.10.2_x64_en-US.msi`)
-            - **macOS Apple Silicon (M1 / M2 / M3 / M4 — Native Metal GPU)**: `AutoSubAI_1.10.2_aarch64.dmg`
-            - **macOS Intel (x86_64)**: `AutoSubAI_1.10.2_x64.dmg`
-            - **🐧 Linux Desktop (x86_64)**: `AutoSubAI_1.10.2_amd64.AppImage` (Universal) or `AutoSubAI_1.10.2_amd64.deb` (Ubuntu / Debian)
+            - **🪟 Windows Microsoft Store Package (`.msix` — Policy 10.2 Ready)**: `AutoSubAI_1.11.0.0_x64_MicrosoftStore.msix`
+            - **🪟 Windows 10 / 11 Direct Installer (Vulkan GPU + Auto CPU Fallback)**: `AutoSubAI_1.11.0_x64-setup.exe` (or `AutoSubAI_1.11.0_x64_en-US.msi`)
+            - **🍎 macOS Apple Silicon (M1 / M2 / M3 / M4 — Native Metal GPU)**: `AutoSubAI_1.11.0_aarch64.dmg`
+            - **💻 macOS Intel (x86_64)**: `AutoSubAI_1.11.0_x64.dmg`
+            - **🐧 Linux Desktop (x86_64)**: `AutoSubAI_1.11.0_amd64.AppImage` (Universal) or `AutoSubAI_1.11.0_amd64.deb` (Ubuntu / Debian)
 
-            ### What's New in v1.10.2 Beta
-            - 🚀 **Windows Vulkan GPU Acceleration (`-DGGML_VULKAN=ON`)**: Hardware-accelerated local offline transcription on NVIDIA, AMD, and Intel GPUs with `/DELAYLOAD:vulkan-1.dll` and automatic `-ng` CPU fallback for PCs without Vulkan drivers.
-            - 💾 **Local Workspace Auto-Save**: Offline-transcribed videos are now automatically persisted into **Local Workspace** (`💻 Local Workspace`) with full subtitle history, thumbnail preview, and permanent Subtitle Studio edit syncing.
-            - 🛡️ **Includes v1.10.1 Anti-Hallucination Engine (`-mc 0 -sns`), T2 Video Filmstrip Snapshots, Ed25519 Signed UI Hot-Patch & Local-Only Meeting Workspace**.
+            ### What's New in v1.11.0
+            - 🏪 **Microsoft Store `.MSIX` Build (`--features ms-store`)**: Clean Store-compliant package ready for Microsoft Partner Center ingestion & free Microsoft Store signing.
+            - ✨ **Studio Easy Mode ⇄ Pro NLE Toggle**: 1-click switch between clean 4-tab / 2-track Easy Mode and full 9-tab / 5-track Pro NLE, plus **5 Visual `Aa` Style Cards** (`Clean`, `Bold`, `Yellow`, `Cinema`, `Minimal`), **Shadow Slider**, `Noto Sans Thai`, and **1-Click Thai Smart Line Break**.
+            - 🔒 **Secretary Meeting Minutes 100% Built-in Offline Mode + PDPA Zero-Retention**: Transcribe & summarize meetings completely offline with zero cloud upload, plus automatic Cloud Workspace isolation & server auto-purge for Cloud AI meetings.
+            - 🛡️ **Model-to-Plan Auto-Verification & Integrity Guard**: Automatic tier sync (`Free/PAYG → Small ≤60m`, `Creator → Turbo ≤180m`, `Pro → Large-v3 ≤180m`), `>=92%` file integrity check, automatic old-model cleanup, and Plan 3 top-up lock.
           files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,9 +1,13 @@
 [package]
 name = "autosubai-desktop"
-version = "1.10.2"
+version = "1.11.0"
 description = "AutoSubAI Native Desktop Studio (Tauri v2 Full Studio)"
 authors = ["AutoSubAI Team"]
 edition = "2021"
+
+[features]
+default = []
+ms-store = []
 
 [lib]
 name = "autosubai_desktop_lib"
