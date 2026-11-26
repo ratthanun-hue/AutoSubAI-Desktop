@@ -283,6 +283,9 @@
       openTopupPage,
       getActiveOfflineModelSpec,
       isOfflineModelDownloaded,
+      getOfflineTierCopy,
+      hasOtherOfflineModelsOnDisk,
+      verifyOfflineEntitlementFresh,
       downloadSelectedOfflineModel,
       syncOfflineWhisperConfig,
     });
@@ -449,9 +452,18 @@
 
   async function refreshProfile(silent = false) {
     if (!state.token) { state.profile = null; renderAuthUI(); return false; }
+    const prevTier = state.profile ? String(state.profile.plan_tier || 'free').toLowerCase() : '';
+    const prevSuper = Boolean(state.profile && state.profile.is_superuser);
     try {
       state.profile = await invokeCmd('api_get_profile', { apiBase: state.apiBase, token: state.token });
       renderAuthUI();
+      const nextTier = String((state.profile && state.profile.plan_tier) || 'free').toLowerCase();
+      const nextSuper = Boolean(state.profile && state.profile.is_superuser);
+      const cfgTier = state.offlineConfig ? String(state.offlineConfig.user_tier || '').toLowerCase() : '';
+      if (prevTier !== nextTier || prevSuper !== nextSuper || (cfgTier && cfgTier !== nextTier && !nextSuper)) {
+        state.selectedOfflineModel = '';
+        syncOfflineWhisperConfig().catch(() => {});
+      }
       if (state.activeTab === 'projects') loadWorkspaceProjects();
       return true;
     } catch (err) {
@@ -624,11 +636,72 @@
     return found || models[0];
   }
 
-  function isOfflineModelDownloaded(filename) {
+  function isOfflineModelDownloaded(filenameOrSpec) {
     const dl = (state.offlineStatus && Array.isArray(state.offlineStatus.downloaded))
       ? state.offlineStatus.downloaded
       : [];
-    return dl.find((d) => d.filename === filename) || null;
+    const filename = typeof filenameOrSpec === 'string'
+      ? filenameOrSpec
+      : (filenameOrSpec && filenameOrSpec.filename);
+    if (!filename) return null;
+    const found = dl.find((d) => d.filename === filename) || null;
+    if (!found) return null;
+
+    // File Integrity Guard: verify downloaded binary is >=92% of expected spec size (blocks truncated/corrupt files)
+    let spec = (filenameOrSpec && typeof filenameOrSpec === 'object') ? filenameOrSpec : null;
+    if (!spec && state.offlineConfig && Array.isArray(state.offlineConfig.models)) {
+      spec = state.offlineConfig.models.find((m) => m.filename === filename) || null;
+    }
+    const expectedMb = spec ? Number(spec.size_mb || 0) : 0;
+    const actualBytes = Number(found.size_bytes || 0);
+    if (expectedMb > 0 && actualBytes > 0) {
+      const minValidBytes = Math.floor(expectedMb * 1024 * 1024 * 0.92);
+      if (actualBytes < minValidBytes) return null;
+    }
+    return found;
+  }
+
+  function hasOtherOfflineModelsOnDisk(activeFilename) {
+    const dl = (state.offlineStatus && Array.isArray(state.offlineStatus.downloaded))
+      ? state.offlineStatus.downloaded
+      : [];
+    return dl.some((d) => d && d.filename && d.filename !== activeFilename && Number(d.size_bytes || 0) > 1024 * 1024);
+  }
+
+  function getOfflineTierCopy(spec, isEn) {
+    const mid = spec ? String(spec.id || '').toLowerCase() : 'small';
+    if (mid === 'large-v3') {
+      return {
+        installed: isEn ? 'Pro Tier — Max Accuracy (Model Installed)' : 'สิทธิ์ Pro — รุ่นความแม่นยำสูงสุด (โมเดลติดตั้งสำเร็จ)',
+        ready: isEn ? 'Pro Tier — Max Accuracy Built-in' : 'สิทธิ์ Pro — รุ่นความแม่นยำสูงสุด',
+        installBtn: isEn ? '⬇️ Install Pro Model' : '⬇️ ติดตั้งโมเดล Pro',
+        upgradeBtn: isEn ? '⬆️ Upgrade to Pro Model' : '⬆️ อัปเกรดติดตั้งโมเดล Pro',
+      };
+    }
+    if (mid === 'large-v3-turbo') {
+      return {
+        installed: isEn ? 'Creator Tier — Turbo (Model Installed)' : 'สิทธิ์ Creator — รุ่น Turbo (โมเดลติดตั้งสำเร็จ)',
+        ready: isEn ? 'Creator Tier — High-Speed Turbo Built-in' : 'สิทธิ์ Creator — รุ่น Turbo',
+        installBtn: isEn ? '⬇️ Install Creator Model' : '⬇️ ติดตั้งโมเดล Creator',
+        upgradeBtn: isEn ? '⬆️ Upgrade to Creator Model' : '⬆️ อัปเกรดติดตั้งโมเดล Creator',
+      };
+    }
+    return {
+      installed: isEn ? 'Free Version — 0 Credits (Model Installed)' : 'เวอร์ชั่นฟรี-ไม่หักเครดิต (โมเดลติดตั้งสำเร็จ)',
+      ready: isEn ? 'Free Version — 0 Credits' : 'เวอร์ชั่นฟรี-ไม่หักเครดิต',
+      installBtn: isEn ? '⬇️ Install Built-in Model' : '⬇️ ติดตั้งโมเดล Built-in',
+      upgradeBtn: isEn ? '⬇️ Install Built-in Model' : '⬇️ ติดตั้งโมเดล Built-in',
+    };
+  }
+
+  async function verifyOfflineEntitlementFresh() {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    try {
+      await Promise.race([
+        syncOfflineWhisperConfig(),
+        new Promise((r) => setTimeout(r, 3000)),
+      ]);
+    } catch (_) {}
   }
 
   function renderOfflineModelPanel() {
@@ -654,8 +727,10 @@
     state.selectedOfflineModel = validCur ? state.selectedOfflineModel : preferred;
 
     const spec = getActiveOfflineModelSpec();
-    const dlInfo = spec ? isOfflineModelDownloaded(spec.filename) : null;
+    const dlInfo = spec ? isOfflineModelDownloaded(spec) : null;
     const isLoggedIn = Boolean(state.token && String(state.token).trim());
+    const tierCopy = getOfflineTierCopy(spec, isEn);
+    const isUpgradePending = Boolean(isLoggedIn && !dlInfo && spec && hasOtherOfflineModelsOnDisk(spec.filename));
 
     const descEl = $('offline-plan-desc');
     const actionsEl = $('offline-card-actions');
@@ -663,14 +738,10 @@
 
     if (descEl) {
       if (isLoggedIn && dlInfo) {
-        descEl.textContent = isEn
-          ? 'Free Version — 0 Credits (Model Installed)'
-          : 'เวอร์ชั่นฟรี-ไม่หักเครดิต (โมเดลติดตั้งสำเร็จ)';
+        descEl.textContent = tierCopy.installed;
         descEl.classList.add('offline-installed-desc');
       } else {
-        descEl.textContent = isEn
-          ? 'Free Version — 0 Credits (Built-in Model)'
-          : 'เวอร์ชั่นฟรี-ไม่หักเครดิต';
+        descEl.textContent = tierCopy.ready;
         descEl.classList.remove('offline-installed-desc');
       }
     }
@@ -688,7 +759,7 @@
         dlBtn.classList.remove('hidden');
         dlBtn.disabled = true;
       } else {
-        dlBtn.textContent = isEn ? '⬇️ Install Built-in Model' : '⬇️ ติดตั้งโมเดล Built-in';
+        dlBtn.textContent = isUpgradePending ? tierCopy.upgradeBtn : tierCopy.installBtn;
         dlBtn.classList.remove('hidden');
         dlBtn.disabled = false;
       }
@@ -768,7 +839,20 @@
         filename: spec.filename,
       });
       state.offlineStatus = await invokeCmd('whisper_list_models');
-      showToast('✅ ติดตั้งโมเดล Built-in สำเร็จ! พร้อมถอดเสียงได้ทันที', 'ok');
+      // Auto-clean obsolete lower/different tier model files on disk after valid new model is installed (non-superuser)
+      const isSuper = Boolean(state.profile && state.profile.is_superuser);
+      if (!isSuper && isOfflineModelDownloaded(spec)) {
+        const obsolete = (state.offlineStatus.downloaded || []).filter((d) => d && d.filename && d.filename !== spec.filename);
+        for (const old of obsolete) {
+          await invokeCmd('whisper_delete_model', { filename: old.filename }).catch(() => {});
+        }
+        if (obsolete.length) {
+          state.offlineStatus = await invokeCmd('whisper_list_models').catch(() => state.offlineStatus);
+        }
+      }
+      const isEn = window.DesktopI18n && window.DesktopI18n.getLang() === 'en';
+      const copy = getOfflineTierCopy(spec, isEn);
+      showToast(`✅ ${copy.installed} — พร้อมถอดเสียงได้ทันที`, 'ok');
     } catch (err) {
       showToast(`ติดตั้งโมเดลไม่สำเร็จ: ${err}`, 'err');
     } finally {
@@ -1014,13 +1098,18 @@
         }
         return;
       }
+      await verifyOfflineEntitlementFresh();
       const spec = getActiveOfflineModelSpec();
       if (!spec) {
         showToast('โหมดออฟไลน์ถูกปิดใช้งานชั่วคราวจากเซิร์ฟเวอร์', 'err');
         return;
       }
-      if (!isOfflineModelDownloaded(spec.filename)) {
-        showToast('กรุณากดปุ่ม "⬇️ ติดตั้งโมเดล Built-in" บนการ์ดก่อนเริ่มถอดเสียง', 'info');
+      if (!isOfflineModelDownloaded(spec)) {
+        renderOfflineModelPanel();
+        const isEn = window.DesktopI18n && window.DesktopI18n.getLang() === 'en';
+        const copy = getOfflineTierCopy(spec, isEn);
+        const btnLbl = hasOtherOfflineModelsOnDisk(spec.filename) ? copy.upgradeBtn : copy.installBtn;
+        showToast(`กรุณากดปุ่ม "${btnLbl}" บนการ์ดเพื่อใช้โมเดลที่ตรงกับแพ็กเกจปัจจุบันครับ`, 'info');
         return;
       }
       state.running = true; state.stopRequested = false; renderQueue();
@@ -1347,7 +1436,20 @@
       }
     });
     $('auth-close-btn').addEventListener('click', () => $('auth-panel').classList.add('hidden'));
-    $('credit-pill').addEventListener('click', async () => { await refreshProfile(true); showToast('Credit balance refreshed', 'ok'); });
+    $('credit-pill').addEventListener('click', async () => {
+      await refreshProfile(true);
+      await syncOfflineWhisperConfig();
+      showToast('🔄 อัปเดตยอดเครดิตและสิทธิ์โมเดลเรียบร้อย', 'ok');
+    });
+    // Auto re-check Plan & Model entitlements when returning from browser after checkout (debounced 15s)
+    let lastFocusSyncAt = 0;
+    window.addEventListener('focus', () => {
+      if (!state.token || state.offlineDownloading) return;
+      const now = Date.now();
+      if (now - lastFocusSyncAt < 15000) return;
+      lastFocusSyncAt = now;
+      refreshProfile(true).catch(() => {});
+    });
     $('logout-btn').addEventListener('click', () => {
       state.token = ''; state.profile = null; state.projects = []; state.projectsLoaded = false;
       state.selectedOfflineModel = '';

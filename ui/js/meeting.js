@@ -739,9 +739,22 @@
         ? this.host.getActiveOfflineModelSpec()
         : null;
       const dlInfo = (spec && this.host && typeof this.host.isOfflineModelDownloaded === 'function')
-        ? this.host.isOfflineModelDownloaded(spec.filename)
+        ? this.host.isOfflineModelDownloaded(spec)
         : null;
       const en = isEn();
+      const tierCopy = (this.host && typeof this.host.getOfflineTierCopy === 'function')
+        ? this.host.getOfflineTierCopy(spec, en)
+        : {
+            installed: en ? 'Built-in Model (Installed)' : 'โมเดล Built-in (โมเดลติดตั้งสำเร็จ)',
+            ready: en ? 'Built-in Model (100% Offline)' : 'โมเดล Built-in (ออฟไลน์ 100%)',
+            installBtn: en ? '⬇️ Install Built-in Model' : '⬇️ ติดตั้งโมเดล Built-in',
+            upgradeBtn: en ? '⬆️ Upgrade Built-in Model' : '⬆️ อัปเกรดติดตั้งโมเดล Built-in',
+          };
+      const isUpgradePending = Boolean(
+        isLoggedIn && !dlInfo && spec &&
+        this.host && typeof this.host.hasOtherOfflineModelsOnDisk === 'function' &&
+        this.host.hasOtherOfflineModelsOnDisk(spec.filename)
+      );
 
       // Plan 3 Top-Up Lock Guard (requires real top-up / paid tier)
       const p3Locked = this.isPlan3Locked();
@@ -765,13 +778,11 @@
         opt.hidden = !enabled;
         opt.disabled = !enabled;
         if (isLoggedIn && dlInfo) {
-          opt.textContent = en
-            ? '💻 Free — 0 Credits • Built-in Model (Installed • 100% Offline)'
-            : '💻 ฟรี-ไม่หักเครดิต • โมเดล Built-in (โมเดลติดตั้งสำเร็จ)';
+          opt.textContent = `💻 ${tierCopy.installed}`;
         } else {
           opt.textContent = en
-            ? '💻 Free — 0 Credits • Built-in Model (100% Offline)'
-            : '💻 ฟรี-ไม่หักเครดิต • โมเดล Built-in (ออฟไลน์ 100%)';
+            ? `💻 ${tierCopy.ready} (100% Offline)`
+            : `💻 ${tierCopy.ready} • โมเดล Built-in (ออฟไลน์ 100%)`;
         }
       }
 
@@ -793,6 +804,10 @@
               msgEl.textContent = en
                 ? '⏳ Installing Built-in Model on this computer... please wait.'
                 : '⏳ กำลังติดตั้งโมเดล Built-in ลงในเครื่อง... กรุณารอสักครู่';
+            } else if (isUpgradePending) {
+              msgEl.textContent = en
+                ? `🎉 Your plan includes ${tierCopy.ready} — click upgrade once to switch to your new tier model!`
+                : `🎉 แพ็กเกจของคุณได้รับ ${tierCopy.ready} — กดอัปเกรดติดตั้งครั้งเดียวเพื่อใช้งานโมเดลที่ตรงแพ็กเกจครับ`;
             } else {
               msgEl.textContent = en
                 ? '🔒 100% Confidential Local Mode — install the Built-in Model once to transcribe meetings completely offline.'
@@ -807,7 +822,7 @@
               btn.textContent = en ? '⏳ Installing...' : '⏳ กำลังติดตั้งโมเดล...';
               btn.disabled = true;
             } else {
-              btn.textContent = en ? '⬇️ Install Built-in Model' : '⬇️ ติดตั้งโมเดล Built-in';
+              btn.textContent = isUpgradePending ? tierCopy.upgradeBtn : tierCopy.installBtn;
               btn.disabled = false;
             }
           }
@@ -1145,6 +1160,9 @@
           if (auth) auth.classList.remove('hidden');
           return;
         }
+        if (typeof this.host.verifyOfflineEntitlementFresh === 'function') {
+          await this.host.verifyOfflineEntitlementFresh();
+        }
         const spec = typeof this.host.getActiveOfflineModelSpec === 'function'
           ? this.host.getActiveOfflineModelSpec()
           : null;
@@ -1153,11 +1171,11 @@
           return;
         }
         const dlInfo = typeof this.host.isOfflineModelDownloaded === 'function'
-          ? this.host.isOfflineModelDownloaded(spec.filename)
+          ? this.host.isOfflineModelDownloaded(spec)
           : null;
         if (!dlInfo) {
           this.renderOfflineOptionState();
-          this.host.showToast('กรุณากดปุ่ม "⬇️ ติดตั้งโมเดล Built-in" ก่อนเริ่มถอดเสียงครับ', 'info');
+          this.host.showToast('กรุณากดปุ่มติดตั้ง/อัปเกรดโมเดล Built-in ให้ตรงกับแพ็กเกจปัจจุบันก่อนเริ่มถอดเสียงครับ', 'info');
           return;
         }
       } else if (!this.host.state.token || !this.host.state.profile) {
