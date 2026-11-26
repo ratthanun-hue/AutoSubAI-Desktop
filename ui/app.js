@@ -624,7 +624,6 @@
 
   function renderOfflineModelPanel() {
     const card = $('plan-card-local-offline');
-    const panel = $('offline-model-panel');
     const cfg = state.offlineConfig;
     const models = (cfg && Array.isArray(cfg.models)) ? cfg.models : [];
     const enabled = Boolean(cfg && cfg.offline_whisper_enabled && models.length > 0);
@@ -637,79 +636,58 @@
       localStorage.setItem(STORAGE_KEYS.plan, state.plan);
       document.querySelectorAll('.plan-card').forEach((c) => c.classList.toggle('active', c.dataset.plan === state.plan));
     }
+    if (!enabled) return;
 
-    if (!panel) return;
-    const showPanel = enabled && state.plan === 'local-offline';
-    panel.classList.toggle('hidden', !showPanel);
-    if (!showPanel) return;
-
-    const sel = $('offline-model-select');
+    // Resolve the single active Built-in model for the current user's plan
     const isEn = window.DesktopI18n && window.DesktopI18n.getLang() === 'en';
-    if (sel) {
-      const cur = state.selectedOfflineModel || cfg.default_model || models[0].id;
-      sel.innerHTML = models.map((m) => {
-        const lbl = isEn ? (m.label_en || m.label_th || m.id) : (m.label_th || m.id);
-        return `<option value="${escapeHtml(m.id)}" ${m.id === cur ? 'selected' : ''}>${escapeHtml(lbl)}</option>`;
-      }).join('');
-      state.selectedOfflineModel = sel.value || models[0].id;
-    }
+    const preferred = cfg.default_model || models[0].id;
+    const validCur = models.some((m) => m.id === state.selectedOfflineModel);
+    state.selectedOfflineModel = validCur ? state.selectedOfflineModel : preferred;
 
     const spec = getActiveOfflineModelSpec();
     const dlInfo = spec ? isOfflineModelDownloaded(spec.filename) : null;
-    const statusEl = $('offline-model-status');
-    const dlBtn = $('offline-download-btn');
-    const delBtn = $('offline-delete-btn');
-    const engBadge = $('offline-engine-badge');
-    const maxMins = Number(cfg.max_offline_minutes || 15);
-
-    if (engBadge) {
-      const ok = !!(state.offlineStatus && state.offlineStatus.engine_available);
-      engBadge.classList.toggle('pill-ok', ok);
-      engBadge.classList.toggle('pill-warn', !ok);
-      engBadge.textContent = ok
-        ? (isEn
-            ? `💻 Offline Free Forever • Unlimited Files (≤${maxMins}m/file)`
-            : `💻 ฟรีตลอดชีพ • ไม่จำกัดจำนวนไฟล์ (≤${maxMins} น./ไฟล์)`)
-        : (isEn
-            ? '💻 Local Offline (Free Forever • Unlimited Files)'
-            : '💻 ออฟไลน์ในเครื่อง (ฟรีตลอดชีพ • ไม่จำกัดจำนวนไฟล์)');
-    }
-
     const isLoggedIn = Boolean(state.token && String(state.token).trim());
 
-    if (statusEl && spec) {
-      if (!isLoggedIn) {
-        statusEl.textContent = isEn
-          ? '🔐 Please sign in for free to download and use the local voice model'
-          : '🔐 กรุณาเข้าสู่ระบบฟรี เพื่อดาวน์โหลดและใช้งานโมเดลถอดเสียง';
-        statusEl.style.color = '#fbbf24';
-      } else if (dlInfo) {
-        const mb = (dlInfo.size_bytes / (1024 * 1024)).toFixed(1);
-        statusEl.textContent = isEn
-          ? `✅ Model ready on device (${mb} MB) — 100% Offline`
-          : `✅ โมเดลพร้อมในเครื่องแล้ว (${mb} MB) — ออฟไลน์ 100%`;
-        statusEl.style.color = '#34d399';
+    const descEl = $('offline-plan-desc');
+    const actionsEl = $('offline-card-actions');
+    const dlBtn = $('offline-download-btn');
+
+    if (descEl) {
+      if (isLoggedIn && dlInfo) {
+        descEl.textContent = isEn
+          ? 'Free Version — 0 Credits (Model Installed)'
+          : 'เวอร์ชั่นฟรี-ไม่หักเครดิต (โมเดลติดตั้งสำเร็จ)';
+        descEl.classList.add('offline-installed-desc');
       } else {
-        statusEl.textContent = isEn
-          ? `⬇️ Model not downloaded yet (~${spec.size_mb || 148} MB • one-time download)`
-          : `⬇️ ยังไม่ได้ดาวน์โหลดโมเดล (~${spec.size_mb || 148} MB • โหลดครั้งเดียว)`;
-        statusEl.style.color = '#fbbf24';
+        descEl.textContent = isEn
+          ? 'Free Version — 0 Credits (Built-in Model)'
+          : 'เวอร์ชั่นฟรี-ไม่หักเครดิต';
+        descEl.classList.remove('offline-installed-desc');
       }
     }
+
     if (dlBtn) {
       if (!isLoggedIn) {
-        dlBtn.textContent = isEn ? '🔐 Sign in to Download' : '🔐 เข้าสู่ระบบเพื่อดาวน์โหลด';
+        dlBtn.textContent = isEn ? '🔐 Sign in to Install Built-in' : '🔐 เข้าสู่ระบบเพื่อติดตั้งโมเดล';
         dlBtn.classList.remove('hidden');
         dlBtn.disabled = false;
+      } else if (dlInfo) {
+        dlBtn.classList.add('hidden');
+        dlBtn.disabled = false;
+      } else if (state.offlineDownloading) {
+        dlBtn.textContent = isEn ? '⏳ Installing...' : '⏳ กำลังติดตั้งโมเดล...';
+        dlBtn.classList.remove('hidden');
+        dlBtn.disabled = true;
       } else {
-        dlBtn.textContent = isEn ? '⬇️ Download Model' : '⬇️ ดาวน์โหลดโมเดล';
-        dlBtn.classList.toggle('hidden', !!dlInfo);
-        dlBtn.disabled = state.offlineDownloading;
+        dlBtn.textContent = isEn ? '⬇️ Install Built-in Model' : '⬇️ ติดตั้งโมเดล Built-in';
+        dlBtn.classList.remove('hidden');
+        dlBtn.disabled = false;
       }
     }
-    if (delBtn) {
-      delBtn.classList.toggle('hidden', !isLoggedIn || !dlInfo);
-      delBtn.disabled = state.offlineDownloading;
+
+    if (actionsEl) {
+      const hideActions = isLoggedIn && !!dlInfo && !state.offlineDownloading;
+      actionsEl.classList.toggle('hidden', hideActions);
     }
   }
 
@@ -771,9 +749,9 @@
         filename: spec.filename,
       });
       state.offlineStatus = await invokeCmd('whisper_list_models');
-      showToast(`✅ ดาวน์โหลดโมเดล ${spec.filename} สำเร็จ! พร้อมถอดเสียงออฟไลน์ได้ทันที`, 'ok');
+      showToast('✅ ติดตั้งโมเดล Built-in สำเร็จ! พร้อมถอดเสียงได้ทันที', 'ok');
     } catch (err) {
-      showToast(`ดาวน์โหลดโมเดลไม่สำเร็จ: ${err}`, 'err');
+      showToast(`ติดตั้งโมเดลไม่สำเร็จ: ${err}`, 'err');
     } finally {
       state.offlineDownloading = false;
       if (progWrap) progWrap.classList.add('hidden');
@@ -784,11 +762,11 @@
   async function deleteSelectedOfflineModel() {
     const spec = getActiveOfflineModelSpec();
     if (!spec) return;
-    if (!window.confirm(`ลบไฟล์โมเดล ${spec.filename} ออกจากเครื่องเพื่อคืนพื้นที่ดิสก์?`)) return;
+    if (!window.confirm('ลบโมเดลถอดเสียงในเครื่องเพื่อคืนพื้นที่ดิสก์?')) return;
     try {
       await invokeCmd('whisper_delete_model', { filename: spec.filename });
       state.offlineStatus = await invokeCmd('whisper_list_models');
-      showToast(`🗑️ ลบโมเดล ${spec.filename} เรียบร้อยแล้ว`, 'ok');
+      showToast('🗑️ ลบโมเดลในเครื่องเรียบร้อยแล้ว', 'ok');
     } catch (err) {
       showToast(`ลบโมเดลไม่สำเร็จ: ${err}`, 'err');
     } finally {
@@ -798,14 +776,14 @@
 
   async function processOfflineLocalItem(item) {
     const spec = getActiveOfflineModelSpec();
-    if (!spec) throw new Error('ไม่มีโมเดลออฟไลน์ที่เปิดใช้งาน');
+    if (!spec) throw new Error('ไม่มีโมเดลถอดเสียงในตัวที่เปิดใช้งาน');
     const autoSaveSrt = $('opt-autosave-srt').checked;
     const autoSaveVtt = $('opt-autosave-vtt').checked;
-    const maxMins = Number((state.offlineConfig && state.offlineConfig.max_offline_minutes) || 15);
+    const maxMins = Number((state.offlineConfig && state.offlineConfig.max_offline_minutes) || 60);
 
     item.status = 'transcribing';
     item.progress = 25;
-    item.note = `🆓 กำลังถอดเสียงออฟไลน์ในเครื่อง (${spec.id})...`;
+    item.note = '🆓 กำลังถอดเสียงด้วยโมเดล Built-in ในเครื่อง...';
     renderQueue();
 
     const res = await invokeCmd('whisper_transcribe_local', {
@@ -1022,7 +1000,7 @@
         return;
       }
       if (!isOfflineModelDownloaded(spec.filename)) {
-        showToast(`กรุณากดปุ่ม "⬇️ ดาวน์โหลดโมเดล" (${spec.size_mb || 148} MB) ก่อนเริ่มถอดเสียงออฟไลน์`, 'info');
+        showToast('กรุณากดปุ่ม "⬇️ ติดตั้งโมเดล Built-in" บนการ์ดก่อนเริ่มถอดเสียง', 'info');
         return;
       }
       state.running = true; state.stopRequested = false; renderQueue();
@@ -1240,7 +1218,10 @@
       state.selectedOfflineModel = e.target.value;
       renderOfflineModelPanel();
     });
-    $('offline-download-btn')?.addEventListener('click', downloadSelectedOfflineModel);
+    $('offline-download-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadSelectedOfflineModel();
+    });
     $('offline-delete-btn')?.addEventListener('click', deleteSelectedOfflineModel);
     $('offline-refresh-cfg-btn')?.addEventListener('click', async () => {
       await syncOfflineWhisperConfig();

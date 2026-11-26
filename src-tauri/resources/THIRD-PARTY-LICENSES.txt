@@ -28,3 +28,9 @@ and local Hardsub MP4 export.
 ---------------------
 - Project: https://tauri.app/
 - License: MIT / Apache-2.0
+
+4. whisper.cpp (Bundled Built-in Speech Engine)
+-----------------------------------------------
+- Project: https://github.com/ggml-org/whisper.cpp
+- Copyright (c) 2023-2026 The ggml authors
+- License: MIT License (https://opensource.org/licenses/MIT)

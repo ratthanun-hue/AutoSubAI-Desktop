@@ -183,30 +183,19 @@
               <p class="plan-desc">Full Pipeline + AutoSub Contextual Mastermind™ Deep QC</p>
             </button>
 
-            <button type="button" class="plan-card plan-card-offline hidden" id="plan-card-local-offline" data-plan="local-offline">
+            <div role="radio" tabindex="0" class="plan-card plan-card-offline hidden" id="plan-card-local-offline" data-plan="local-offline">
               <div class="plan-top">
                 <span class="plan-name" data-i18n="offlinePlanTitle">🆓 เวอร์ชั่นฟรี-ไม่หักเครดิต</span>
                 <span class="plan-price" style="color:#34d399;">฿0 / ฟรี</span>
               </div>
-              <p class="plan-desc" id="offline-plan-desc" data-i18n="offlinePlanDesc">เวอร์ชั่นฟรี-ไม่หักเครดิต (ถอดเสียงออฟไลน์ในเครื่อง)</p>
-            </button>
-          </div>
-
-          <!-- Remote-Controlled Offline Whisper Model Manager (Visible only when Offline Draft is selected) -->
-          <div id="offline-model-panel" class="offline-model-panel hidden">
-            <div class="offline-model-left">
-              <span class="pill pill-ok" id="offline-engine-badge">💻 โมเดลถอดเสียงในเครื่อง</span>
-              <select id="offline-model-select" class="mini-select" style="min-width:240px;"></select>
-              <span id="offline-model-status" class="muted" style="font-size:12px;">กำลังตรวจสอบโมเดล...</span>
-            </div>
-            <div class="offline-model-actions">
-              <div id="offline-dl-progress-wrap" class="offline-dl-progress hidden">
-                <div class="progress-track" style="width:110px;"><div id="offline-dl-progress-fill" class="progress-fill" style="width:0%"></div></div>
-                <span id="offline-dl-progress-pct" class="mono-tag">0%</span>
+              <p class="plan-desc" id="offline-plan-desc">เวอร์ชั่นฟรี-ไม่หักเครดิต</p>
+              <div id="offline-card-actions" class="offline-card-actions">
+                <button id="offline-download-btn" type="button" class="btn btn-primary btn-xs">⬇️ ติดตั้งโมเดล Built-in</button>
+                <div id="offline-dl-progress-wrap" class="offline-dl-progress hidden">
+                  <div class="progress-track" style="width:92px;"><div id="offline-dl-progress-fill" class="progress-fill" style="width:0%"></div></div>
+                  <span id="offline-dl-progress-pct" class="mono-tag">0%</span>
+                </div>
               </div>
-              <button id="offline-download-btn" type="button" class="btn btn-primary btn-xs" data-i18n="offlineBtnDownload">⬇️ ดาวน์โหลดโมเดล</button>
-              <button id="offline-delete-btn" type="button" class="btn btn-danger-ghost btn-xs hidden" data-i18n="offlineBtnDelete">🗑️ ลบโมเดล</button>
-              <button id="offline-refresh-cfg-btn" type="button" class="btn btn-ghost btn-xs" title="เช็กสิทธิ์โมเดลล่าสุดจากเซิร์ฟเวอร์">🔄</button>
             </div>
           </div>
 

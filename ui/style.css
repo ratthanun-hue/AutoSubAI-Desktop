@@ -1346,6 +1346,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
   border-color: #10b981;
   box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.45), 0 8px 22px rgba(16, 185, 129, 0.16);
 }
+.offline-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+}
+.offline-installed-desc {
+  color: #34d399 !important;
+  font-weight: 600;
+}
 .offline-model-panel {
   display: flex;
   flex-wrap: wrap;
