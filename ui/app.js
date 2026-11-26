@@ -279,6 +279,8 @@
       showToast,
       getFileName,
       refreshProfile,
+      isFreeTrialAccount,
+      openTopupPage,
       getActiveOfflineModelSpec,
       isOfflineModelDownloaded,
       downloadSelectedOfflineModel,
@@ -439,6 +441,9 @@
         localStorage.setItem(STORAGE_KEYS.plan, 'plan-2');
         document.querySelectorAll('.plan-card').forEach((c) => c.classList.toggle('active', c.dataset.plan === 'plan-2'));
       }
+    }
+    if (meetingWorkspace && typeof meetingWorkspace.renderOfflineOptionState === 'function') {
+      meetingWorkspace.renderOfflineOptionState();
     }
   }
 

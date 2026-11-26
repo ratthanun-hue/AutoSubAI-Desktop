@@ -712,8 +712,20 @@
       this._loadAudioPlayer();
     }
 
+    isPlan3Locked() {
+      const st = (this.host && this.host.state) || {};
+      const prof = st.profile;
+      if (!st.token || !prof) return true;
+      if (prof.is_superuser) return false;
+      if (this.host && typeof this.host.isFreeTrialAccount === 'function') {
+        return this.host.isFreeTrialAccount();
+      }
+      return (prof.plan_tier || 'free').toLowerCase() === 'free';
+    }
+
     renderOfflineOptionState() {
       const sel = $('mt-plan-select');
+      const optP3 = $('mt-plan-opt-plan3');
       const opt = $('mt-plan-opt-offline');
       const bar = $('mt-offline-install-bar');
       const msgEl = $('mt-offline-install-msg');
@@ -730,6 +742,24 @@
         ? this.host.isOfflineModelDownloaded(spec.filename)
         : null;
       const en = isEn();
+
+      // Plan 3 Top-Up Lock Guard (requires real top-up / paid tier)
+      const p3Locked = this.isPlan3Locked();
+      if (optP3) {
+        optP3.disabled = p3Locked;
+        if (p3Locked) {
+          optP3.textContent = en
+            ? '🔒 Executive QC • Plan 3 (Top up to unlock)'
+            : '🔒 ตรวจทานระดับเลขา • Plan 3 (เติมเงินเพื่อปลดล็อก)';
+        } else {
+          optP3.textContent = en
+            ? '👑 Executive QC • Plan 3 (฿0.245/min)'
+            : '👑 ตรวจทานระดับเลขา • Plan 3 (฿0.245/น.)';
+        }
+      }
+      if (p3Locked && sel && sel.value === 'plan-3') {
+        sel.value = 'plan-2';
+      }
 
       if (opt) {
         opt.hidden = !enabled;
@@ -1134,6 +1164,13 @@
         this.host.showToast('กรุณาเข้าสู่ระบบบัญชี AutoSubAI ก่อนถอดเสียงครับ (สมัครฟรีรับเครดิต ฿10)', 'info');
         const auth = $('auth-panel');
         if (auth) auth.classList.remove('hidden');
+        return;
+      } else if (model === 'plan-3' && this.isPlan3Locked()) {
+        this.renderOfflineOptionState();
+        this.host.showToast('🔒 Plan 3 สงวนสิทธิ์สำหรับบัญชีที่ผ่านการเติมเงินแล้วเท่านั้น — กรุณาเติมเครดิตเพื่อปลดล็อก', 'err');
+        if (typeof this.host.openTopupPage === 'function') {
+          this.host.openTopupPage();
+        }
         return;
       }
 
