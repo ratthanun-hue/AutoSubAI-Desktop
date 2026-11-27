@@ -28,6 +28,7 @@
         <button id="tab-btn-projects" class="main-tab" data-tab="projects" role="tab" data-i18n="tabProjects">☁️ Cloud Workspace</button>
         <button id="tab-btn-batch" class="main-tab" data-tab="batch" role="tab" data-i18n="tabBatch">⚡ Batch &amp; Cloud AI</button>
         <button id="tab-btn-studio" class="main-tab" data-tab="studio" role="tab" data-i18n="tabStudio">🎬 Subtitle Studio</button>
+        <button id="tab-btn-shorts" class="main-tab main-tab-shorts" data-tab="shorts" role="tab" data-i18n="tabShorts">🔥 AI คลิปสั้น</button>
       </nav>
 
       <div class="topbar-actions">
@@ -1390,6 +1391,218 @@
               </section>
             </div>
           </div>
+      </div>
+
+      <!-- ============================================================
+           TAB 4: AI VIRAL SHORTS STUDIO (PHASE 1 — HYBRID + CLOUD AI)
+           ============================================================ -->
+      <div id="view-shorts" class="tab-view hidden">
+        <!-- Top Control Bar -->
+        <section class="card shorts-topbar-card">
+          <div class="shorts-topbar-row">
+            <div class="shorts-brand-block">
+              <div class="shorts-title-line">
+                <h2>🔥 AI คลิปสั้น (AI Viral Shorts Studio)</h2>
+                <span id="shorts-engine-badge" class="shorts-pill-badge">พร้อมคัดช็อตเด็ดอัตโนมัติ</span>
+              </div>
+              <p class="muted shorts-sub">คัดช่วงเด็ด 30–60 วิ พร้อมคะแนนไวรัล 4 แกน พาดหัวหยุดนิ้ว และส่งออกคลิปแนวตั้ง 9:16 พร้อมซับคาราโอเกะใน 1 คลิก</p>
+            </div>
+            <div class="shorts-mode-switch" role="group" aria-label="AI Analysis Mode">
+              <button id="shorts-mode-local" type="button" class="shorts-mode-btn active" data-shorts-mode="local_fast">💻 ออฟไลน์ฟรี (ในเครื่อง)</button>
+              <button id="shorts-mode-cloud" type="button" class="shorts-mode-btn" data-shorts-mode="cloud_ai">☁️ Cloud AI Director</button>
+            </div>
+          </div>
+
+          <div class="shorts-controls-strip">
+            <div class="shorts-ctrl-group shorts-ctrl-source">
+              <label for="shorts-source-select">โปรเจกต์ต้นฉบับ (ที่มีซับแล้ว)</label>
+              <select id="shorts-source-select" class="mini-select"></select>
+            </div>
+            <div class="shorts-ctrl-group">
+              <label for="shorts-style-select">สไตล์คอนเทนต์</label>
+              <select id="shorts-style-select" class="mini-select">
+                <option value="podcast">🎙️ พอดแคสต์ / สัมภาษณ์</option>
+                <option value="product">🛍️ รีวิว / ขายของ / TikTok Shop</option>
+                <option value="story">📰 เล่าเรื่อง / สรุปข่าว / ความรู้</option>
+                <option value="drama">🎬 ไฮไลต์ละคร / ซีรีส์ / ไลฟ์</option>
+              </select>
+            </div>
+            <div class="shorts-ctrl-group">
+              <label for="shorts-dur-select">ความยาวคลิป</label>
+              <select id="shorts-dur-select" class="mini-select">
+                <option value="15-30">⚡ 15–30 วิ</option>
+                <option value="30-60" selected>🎯 30–60 วิ (แนะนำ)</option>
+                <option value="60-90">📖 60–90 วิ</option>
+              </select>
+            </div>
+            <div class="shorts-ctrl-group">
+              <label for="shorts-count-select">จำนวนช็อต</label>
+              <select id="shorts-count-select" class="mini-select">
+                <option value="3">3 คลิป</option>
+                <option value="5" selected>5 คลิป</option>
+                <option value="8">8 คลิป</option>
+              </select>
+            </div>
+            <div class="shorts-ctrl-action">
+              <button id="shorts-analyze-btn" type="button" class="btn btn-primary shorts-analyze-btn">🔥 วิเคราะห์หาช็อตเด็ด</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Empty State (Shown when no project with subtitles is available yet) -->
+        <div id="shorts-empty-state" class="card empty-state hidden">
+          <h3>🎬 ยังไม่มีคลิปที่ถอดซับสำหรับสร้างคลิปสั้น</h3>
+          <p class="muted">ถอดเสียงคลิปยาวใน <strong>Local Workspace (ฟรีไม่จำกัด)</strong> หรือเปิดโปรเจกต์ใน <strong>Subtitle Studio</strong> ก่อน จากนั้นกลับมาที่แท็บนี้เพื่อคัดช็อตเด็ด 9:16 อัตโนมัติครับ</p>
+          <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:12px;">
+            <button id="shorts-go-local-btn" type="button" class="btn btn-primary btn-sm">💻 ไปที่ Local Workspace</button>
+            <button id="shorts-go-studio-btn" type="button" class="btn btn-secondary btn-sm">🎬 ไปที่ Subtitle Studio</button>
+          </div>
+        </div>
+
+        <!-- 3-Pane AI Shorts Workspace -->
+        <div id="shorts-workspace" class="shorts-3pane hidden">
+          <!-- LEFT PANE: AI Viral Highlights List -->
+          <section class="card shorts-pane shorts-pane-left">
+            <div class="shorts-pane-head">
+              <div>
+                <h3 id="shorts-list-heading">🔥 AI Viral Highlights (0 คลิป)</h3>
+                <span id="shorts-list-sub" class="muted" style="font-size:11px;">คลิกที่การ์ดเพื่อพรีวิว หรือติ๊กหลายคลิปเพื่อสร้างพร้อมกัน</span>
+              </div>
+              <button id="shorts-select-all-btn" type="button" class="btn btn-ghost btn-xs">☑ เลือกทั้งหมด</button>
+            </div>
+            <div id="shorts-clips-list" class="shorts-clips-list"></div>
+            <div class="shorts-batch-foot">
+              <div id="shorts-batch-progress" class="shorts-batch-progress hidden"></div>
+              <button id="shorts-batch-export-btn" type="button" class="btn btn-primary shorts-full-btn" disabled>🚀 ส่งออกคลิปที่เลือกทั้งหมด (0 คลิป)</button>
+            </div>
+          </section>
+
+          <!-- CENTER PANE: 9:16 Interactive Vertical Mobile Preview -->
+          <section class="card shorts-pane shorts-pane-center">
+            <div class="shorts-preview-stage">
+              <div id="shorts-phone-frame" class="shorts-phone-frame shorts-bg-blur">
+                <video id="shorts-preview-bg" class="shorts-video-bg" muted playsinline></video>
+                <video id="shorts-preview-video" class="shorts-video-fg" playsinline></video>
+
+                <!-- Top Viral Hook Banner -->
+                <div id="shorts-hook-banner" class="shorts-hook-banner">พาดหัวคลิปสั้นหยุดนิ้ว</div>
+
+                <!-- Live Subtitle Preview -->
+                <div id="shorts-sub-preview" class="shorts-sub-preview shorts-preset-yellow"></div>
+
+                <!-- TikTok / Reels / Shorts Safe Zone Guides -->
+                <div id="shorts-safe-zone" class="shorts-safe-zone">
+                  <div class="shorts-sz-frame"></div>
+                  <div class="shorts-sz-label">TikTok / Reels Safe Zone</div>
+                  <div class="shorts-sz-icons" aria-hidden="true">
+                    <span>♥</span>
+                    <span>💬</span>
+                    <span>↪</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scrubber & Fine-Tune Bar -->
+            <div class="shorts-player-bar">
+              <button id="shorts-play-btn" type="button" class="btn btn-secondary btn-xs">▶ เล่น</button>
+              <span id="shorts-time-label" class="shorts-time-label">00:00 / 00:00</span>
+              <input id="shorts-scrubber" type="range" min="0" max="100" step="0.1" value="0" class="shorts-scrubber" />
+            </div>
+            <div class="shorts-nudge-bar">
+              <span class="muted" style="font-size:11px;">ปรับขอบช็อต:</span>
+              <button id="shorts-start-minus" type="button" class="btn btn-ghost btn-xs">เริ่ม -1วิ</button>
+              <button id="shorts-start-plus" type="button" class="btn btn-ghost btn-xs">เริ่ม +1วิ</button>
+              <span id="shorts-range-pill" class="shorts-range-pill">00:00 → 00:45</span>
+              <button id="shorts-end-minus" type="button" class="btn btn-ghost btn-xs">จบ -1วิ</button>
+              <button id="shorts-end-plus" type="button" class="btn btn-ghost btn-xs">จบ +1วิ</button>
+            </div>
+          </section>
+
+          <!-- RIGHT PANE: Creator Controls & Render -->
+          <section class="card shorts-pane shorts-pane-right">
+            <div class="shorts-right-scroll">
+              <!-- Hook Title + 3 AI Options -->
+              <div class="shorts-ctrl-box">
+                <label class="shorts-box-label" for="shorts-ai-headline">✨ พาดหัวด้านบนคลิป (Hook Title)</label>
+                <input id="shorts-ai-headline" type="text" placeholder="พิมพ์พาดหัว หรือเลือกจากไอเดีย AI ด้านล่าง..." />
+                <div id="shorts-hook-chips" class="shorts-hook-chips"></div>
+                <div class="shorts-color-swatches">
+                  <span class="muted" style="font-size:11px;">สีพาดหัว:</span>
+                  <button type="button" class="shorts-swatch active" data-hl-color="#fde047" style="background:#fde047;" title="เหลืองไวรัล"></button>
+                  <button type="button" class="shorts-swatch" data-hl-color="#ffffff" style="background:#ffffff;" title="ขาวคลีน"></button>
+                  <button type="button" class="shorts-swatch" data-hl-color="#38bdf8" style="background:#38bdf8;" title="ฟ้าสว่าง"></button>
+                  <button type="button" class="shorts-swatch" data-hl-color="#fb7185" style="background:#fb7185;" title="ชมพูแดง"></button>
+                  <button type="button" class="shorts-swatch" data-hl-color="#4ade80" style="background:#4ade80;" title="เขียวมิ้นต์"></button>
+                </div>
+              </div>
+
+              <!-- Reframe / Background Mode -->
+              <div class="shorts-ctrl-box">
+                <span class="shorts-box-label">📐 โหมดจัดเฟรมแนวตั้ง 9:16</span>
+                <div class="shorts-pill-row">
+                  <button type="button" class="shorts-opt-pill active" data-bg-mode="blur">🌫️ พื้นหลังเบลอ</button>
+                  <button type="button" class="shorts-opt-pill" data-bg-mode="crop_fill">📱 ครอปเต็มจอ</button>
+                  <button type="button" class="shorts-opt-pill" data-bg-mode="solid">⬛ ขอบดำ Cinema</button>
+                </div>
+              </div>
+
+              <!-- Smart Polish Toggles -->
+              <div class="shorts-ctrl-box">
+                <span class="shorts-box-label">🪄 ปรับแต่งอัจฉริยะ (Smart Polish)</span>
+                <label class="shorts-toggle-row">
+                  <span>📱 แสดงกรอบ Safe-Zone (TikTok / Reels)</span>
+                  <input id="shorts-tog-safezone" type="checkbox" checked />
+                </label>
+                <label class="shorts-toggle-row">
+                  <span>✨ เปิดซับเด้งคาราโอเกะ (Word-Highlight)</span>
+                  <input id="shorts-tog-karaoke" type="checkbox" checked />
+                </label>
+                <label class="shorts-toggle-row">
+                  <span>✂️ ตัดบรรทัดภาษาไทยอัจฉริยะ (≤20 ตัว/บรรทัด)</span>
+                  <input id="shorts-tog-linebreak" type="checkbox" checked />
+                </label>
+              </div>
+
+              <!-- 4 Visual Subtitle Preset Cards -->
+              <div class="shorts-ctrl-box">
+                <span class="shorts-box-label">🎨 สไตล์ซับคลิปสั้น (1 คลิก)</span>
+                <div class="shorts-preset-grid">
+                  <button type="button" class="shorts-preset-card" data-shorts-preset="clean">
+                    <span class="sp-sample sp-clean">Aa</span>
+                    <span class="sp-name">Clean</span>
+                  </button>
+                  <button type="button" class="shorts-preset-card" data-shorts-preset="bold">
+                    <span class="sp-sample sp-bold">Aa</span>
+                    <span class="sp-name">Bold</span>
+                  </button>
+                  <button type="button" class="shorts-preset-card active" data-shorts-preset="yellow">
+                    <span class="sp-sample sp-yellow">Aa</span>
+                    <span class="sp-name">Yellow</span>
+                  </button>
+                  <button type="button" class="shorts-preset-card" data-shorts-preset="cinema">
+                    <span class="sp-sample sp-cinema">Aa</span>
+                    <span class="sp-name">Cinema</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Caption & Hashtags -->
+              <div class="shorts-ctrl-box">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <span class="shorts-box-label" style="margin:0;">📝 แคปชัน &amp; แฮชแท็กพร้อมโพสต์</span>
+                  <button id="shorts-copy-caption-btn" type="button" class="btn btn-ghost btn-xs">📋 ก๊อปปี้</button>
+                </div>
+                <textarea id="shorts-caption-text" rows="3" placeholder="แคปชันและแฮชแท็กจะปรากฏที่นี่..."></textarea>
+              </div>
+            </div>
+
+            <div class="shorts-right-foot">
+              <button id="shorts-render-one-btn" type="button" class="btn btn-primary shorts-full-btn">🚀 สร้างคลิปสั้น 9:16 MP4</button>
+              <button id="shorts-open-studio-btn" type="button" class="btn btn-secondary shorts-full-btn">✏️ เปิดแก้ละเอียดใน 5-Track Studio</button>
+            </div>
+          </section>
+        </div>
       </div>
     </main>
 

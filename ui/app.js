@@ -160,8 +160,8 @@
   function switchTab(tab) {
     state.activeTab = tab;
     const ws = document.querySelector('.workspace');
-    if (ws) ws.classList.toggle('studio-wide', tab === 'studio');
-    ['local', 'meeting', 'projects', 'batch', 'studio'].forEach((t) => {
+    if (ws) ws.classList.toggle('studio-wide', tab === 'studio' || tab === 'shorts');
+    ['local', 'meeting', 'projects', 'batch', 'studio', 'shorts'].forEach((t) => {
       const btn = $(`tab-btn-${t}`);
       const view = $(`view-${t}`);
       if (btn) btn.classList.toggle('active', t === tab);
@@ -176,6 +176,9 @@
     if (tab === 'meeting' && meetingWorkspace) {
       if (typeof meetingWorkspace.onTabShown === 'function') meetingWorkspace.onTabShown();
       else meetingWorkspace.syncInputsFromState();
+    }
+    if (tab === 'shorts' && shortsStudio) {
+      shortsStudio.onTabShown();
     }
   }
 
@@ -196,6 +199,7 @@
   let splitMerge = null;
   let proEditor = null;
   let meetingWorkspace = null;
+  let shortsStudio = null;
 
   // Instantiate Modular Native Subtitle Studio
   const studio = new window.DesktopSubtitleStudio({
@@ -289,6 +293,24 @@
       downloadSelectedOfflineModel,
       syncOfflineWhisperConfig,
     });
+  }
+
+  // Instantiate Phase 1A AI Viral Shorts Studio
+  if (window.DesktopShortsStudio) {
+    shortsStudio = new window.DesktopShortsStudio(
+      {
+        state,
+        invokeCmd,
+        toAssetUrl,
+        showToast,
+        getFileName,
+        switchTab,
+        refreshProfile,
+        openTopupPage,
+      },
+      studio,
+      localWorkspace
+    );
   }
 
   // --- Built-in Auto-Updater ---
@@ -1595,6 +1617,7 @@
     if (splitMerge) splitMerge.bindEvents();
     if (proEditor) proEditor.bindEvents();
     if (meetingWorkspace) meetingWorkspace.bindEvents();
+    if (shortsStudio) shortsStudio.bindEvents();
   }
 
   async function bootDesktopApp() {
