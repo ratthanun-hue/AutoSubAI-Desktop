@@ -183,6 +183,10 @@
   }
 
   function openTopupPage() {
+    if (!state.paymentsEnabled) {
+      showToast('🔧 ระบบเติมเงินปิดปรับปรุงชั่วคราว (ระหว่างอัปเกรดเซิร์ฟเวอร์ใหม่) — ใช้งานโหมดถอดเสียงออฟไลน์ฟรีไม่จำกัดและโควตาฟรีได้ตามปกติครับ', 'info');
+      return;
+    }
     invokeCmd('open_cloud_studio', {
       url: `${state.apiBase}/app?page=billing`,
       token: state.token || null,
@@ -814,6 +818,7 @@
 
     if (cfg && typeof cfg === 'object') {
       state.offlineConfig = cfg;
+      state.paymentsEnabled = cfg.payments_enabled === true;
       if (!state.selectedOfflineModel && cfg.default_model) {
         state.selectedOfflineModel = cfg.default_model;
       }
@@ -1156,8 +1161,12 @@
     }
     const bal = Number(state.profile.credit_balance_thb ?? 0);
     if (bal <= 0 && !(isFreeTrialAccount() && state.plan === 'plan-1')) {
-      showToast('💳 เครดิตคงเหลือ ฿0.00 — กำลังเปิดหน้าเติมเงิน PromptPay...', 'err');
-      openTopupPage();
+      if (state.paymentsEnabled) {
+        showToast('💳 เครดิตคงเหลือ ฿0.00 — กำลังเปิดหน้าเติมเงิน PromptPay...', 'err');
+        openTopupPage();
+      } else {
+        showToast('🔧 ระบบเติมเงินปิดปรับปรุงชั่วคราว — สามารถใช้โหมดถอดเสียงออฟไลน์ฟรีไม่จำกัดในเครื่องแทนได้ทันทีครับ', 'info');
+      }
       return;
     }
     state.running = true; state.stopRequested = false; renderQueue();

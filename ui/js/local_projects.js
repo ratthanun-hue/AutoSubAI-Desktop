@@ -427,21 +427,22 @@
       }
 
       const bal = Number(prof.credit_balance_thb ?? 0);
+      const payOpen = this.host.state.paymentsEnabled === true;
       if (freeTrial && plan === 'plan-3') {
         infoBox.innerHTML = `
           <div>💳 เครดิตคงเหลือ: <strong>฿${bal.toFixed(2)}</strong> (บัญชีทดลองฟรี)</div>
-          <div style="margin-top:6px;color:#fca5a5;">🔒 <strong>บัญชีรับเครดิตฟรี ฿10 (ยังไม่เคยเติมเงิน) ใช้ได้สูงสุด Plan 2 (LipSync Pro™)</strong> — กรุณาเลือก Plan 1/2 หรือเติมเครดิตเพื่อปลดล็อก Plan 3</div>
+          <div style="margin-top:6px;color:#fca5a5;">🔒 <strong>บัญชีรับเครดิตฟรี ฿10 ใช้ได้สูงสุด Plan 2 (LipSync Pro™)</strong> — ${payOpen ? 'กรุณาเลือก Plan 1/2 หรือเติมเครดิตเพื่อปลดล็อก Plan 3' : 'ระบบเติมเงินปิดปรับปรุงชั่วคราว กรุณาเลือก Plan 1/2 หรือใช้โหมดออฟไลน์ฟรีครับ'}</div>
         `;
-        topupBtn.classList.remove('hidden');
+        if (payOpen) topupBtn.classList.remove('hidden');
         return;
       }
 
       if (bal < estCost || bal <= 0) {
         infoBox.innerHTML = `
           <div>⏱️ ความยาวคลิป: <strong>${durLabel}</strong> • ค่าบริการประมาณการ: <strong>฿${estCost.toFixed(2)}</strong></div>
-          <div style="margin-top:6px;color:#fca5a5;">⚠️ <strong>เครดิตไม่เพียงพอ</strong> (ยอดคงเหลือของคุณคือ <strong>฿${bal.toFixed(2)}</strong>) — กดปุ่มด้านล่างเพื่อไปหน้าเติมเงิน PromptPay ทันที</div>
+          <div style="margin-top:6px;color:#fca5a5;">⚠️ <strong>เครดิตไม่เพียงพอ</strong> (ยอดคงเหลือของคุณคือ <strong>฿${bal.toFixed(2)}</strong>) — ${payOpen ? 'กดปุ่มด้านล่างเพื่อไปหน้าเติมเงิน PromptPay ทันที' : 'ระบบเติมเงินปิดปรับปรุงชั่วคราว สามารถใช้โหมดถอดเสียงออฟไลน์ฟรีไม่จำกัดในเครื่องได้ทันทีครับ'}</div>
         `;
-        topupBtn.classList.remove('hidden');
+        if (payOpen) topupBtn.classList.remove('hidden');
         return;
       }
 
